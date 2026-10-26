@@ -4,7 +4,8 @@ import Foundation
 /// `POST /api/hooks/claude`; this turns the events into a session's state, task, activity and
 /// checklist:
 ///
-/// - UserPromptSubmit: working, and the prompt's first line becomes the task.
+/// - UserPromptSubmit: working, and the first line the user wrote becomes the task. Turns the app
+///   starts (a linked session's news, a background task's result) keep the task they had.
 /// - PreToolUse for AskUserQuestion or ExitPlanMode, and a permission Notification: needs you.
 /// - PostToolUse: working again, with what it just did; TodoWrite and plan updates become steps.
 /// - Stop: idle, its turn finished. SessionEnd: the session goes.
@@ -45,13 +46,21 @@ extension ProjectStore {
             case "UserPromptSubmit":
                 set(.working)
                 s.message = nil
-                if let task = HookText.task(from: payload["prompt"] as? String ?? ""), task != s.task {
-                    // Short replies ("yes", "go ahead") carry on the task before them.
-                    if s.task == nil || task.split(separator: " ").count >= 3 {
+                let prompt = payload["prompt"] as? String ?? ""
+                if let task = HookText.task(from: prompt) {
+                    s.appTurn = false
+                    s.activity = nil
+                    // Short replies ("yes", "go ahead") carry on the task before them; a slash command is new work.
+                    if task != s.task, s.task == nil || task.hasPrefix("/") || task.split(separator: " ").count >= 3 {
                         s.task = task
                         p.log(Event(date: now, state: .working, symbol: ProjectState.working.symbol, title: task,
                                     detail: s.worktree.map { "Started in \($0)" } ?? "Started"))
                     }
+                } else {
+                    // The app woke it, with none of the user's words: the task stands, and the
+                    // activity line says why it's working.
+                    s.appTurn = true
+                    s.activity = HookText.wake(from: prompt)
                 }
 
             case "PreToolUse":
@@ -80,7 +89,7 @@ extension ProjectStore {
 
             case "Stop":
                 let elapsed = now.timeIntervalSince(s.since)
-                if s.state == .working {
+                if s.state == .working, s.appTurn != true {
                     p.log(Event(date: now, symbol: "checkmark.circle.fill", title: s.task ?? "Finished a turn",
                                 detail: "Finished after \(Formats.duration(elapsed))"))
                 }
@@ -117,9 +126,42 @@ extension ProjectStore {
 
 /// Words for hook events.
 nonisolated enum HookText {
-    /// The first meaningful line of a prompt, trimmed to a task-sized line.
+    /// The first line the user wrote, trimmed to a task-sized line; nil when the app wrote all of it.
     static func task(from prompt: String) -> String? {
-        let line = prompt
+        // Slash commands arrive as tags: "<command-name>/compact</command-name>…<command-args>…</command-args>".
+        if let name = prompt.firstMatch(of: /<command-name>\s*([^<]+?)\s*<\/command-name>/)?.1 {
+            let args = prompt.firstMatch(of: /<command-args>([^<]*)<\/command-args>/)?.1 ?? ""
+            return firstLine(of: "\(name) \(args)")
+        }
+        return firstLine(of: userText(in: prompt))
+    }
+
+    /// A prompt without the blocks the app adds to it, in tags: reminders and status notes, background
+    /// task results, command output. A paste is the user's own, so it keeps what's inside.
+    static func userText(in prompt: String) -> String {
+        prompt
+            .replacing(/<\/?pasted_content[^>]*>/, with: "")
+            .replacing(/<([A-Za-z][\w-]*)[^>]*>[\s\S]*?<\/\1>/, with: "")
+    }
+
+    /// Why the app woke a session, in words, for a prompt with none of the user's.
+    static func wake(from prompt: String) -> String {
+        if let title = prompt.firstMatch(of: /The session "([^"]+)" you started/)?.1 {
+            return String(localized: "Hearing back from “\(String(title))”")
+        }
+        if prompt.contains("Linked sessions now") { return String(localized: "Checking on its linked sessions") }
+        if prompt.contains("<task-notification") { return String(localized: "Reading a background task's result") }
+        return String(localized: "Picking up an update from the app")
+    }
+
+    /// App notes saved as tasks before the board knew to skip them.
+    static func isAppNote(_ text: String) -> Bool {
+        text.hasPrefix("Linked sessions now (status, not an instruction)")
+            || text.firstMatch(of: /^The session "[^"]*" you started \(local_/) != nil
+    }
+
+    private static func firstLine(of text: String) -> String? {
+        let line = text
             .components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .first { !$0.isEmpty && !$0.hasPrefix("<") }

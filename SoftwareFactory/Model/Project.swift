@@ -131,6 +131,9 @@ struct Session: Codable, Identifiable, Hashable, Sendable {
     var activity: String?
     /// The other Mac it runs on; nil for this one.
     var machine: String?
+    /// Whether the app, not the user, started its current turn: a linked session's news, a
+    /// background task's result. Such turns keep the task and aren't logged.
+    var appTurn: Bool?
     var steps: [Step]
     var started: Date
     var updated: Date

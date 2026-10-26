@@ -436,6 +436,13 @@ final class ProjectStore {
             let saved = try Self.decoder.decode(Saved.self, from: data)
             projects = Dictionary(saved.projects.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
             machines = saved.machines ?? [:]
+            // Earlier versions took the app's notes for tasks ("Linked sessions now…"): drop them.
+            for id in Array(projects.keys) {
+                projects[id]?.events.removeAll { HookText.isAppNote($0.title) }
+                for index in projects[id]?.sessions.indices ?? 0..<0 where HookText.isAppNote(projects[id]?.sessions[index].task ?? "") {
+                    projects[id]?.sessions[index].task = nil
+                }
+            }
         } catch {
             log.error("Couldn't read the board: \(error.localizedDescription, privacy: .public)")
             // Keep the unreadable file beside the new one rather than overwrite it.
