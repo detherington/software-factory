@@ -169,7 +169,8 @@ private struct NowPanel: View {
             .padding(22)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(state.swatch.gradient, in: .rect(cornerRadius: Switchyard.cardRadius, style: .continuous))
-        } else if let line = project.task ?? project.note ?? lead?.task {
+        } else if let line = state == .done ? (project.note ?? project.task) : (project.task ?? project.note ?? lead?.task) {
+            // Shipped leads with what shipped (the note), not the task before it.
             Card(padding: 20) {
                 TrackedLabel(state == .done ? String(localized: "Shipped") : String(localized: "Last worked on"), size: 11, color: Switchyard.textTertiary)
                 Text(line)
