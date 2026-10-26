@@ -33,6 +33,10 @@ struct ProjectContent: View {
         VStack(alignment: .leading, spacing: 16) {
             ScreenHeader(label: [project.code, project.displayPath].compactMap { $0 }.joined(separator: " · "), title: project.name) {
                 HStack(spacing: 8) {
+                    if let chat = store.bestChat(for: project) {
+                        GlassIconButton(systemImage: "bubble.left.and.text.bubble.right",
+                                        accessibilityLabel: String(localized: "Open “\(chat.title ?? project.name)” in Claude")) { Reveal.chat(chat) }
+                    }
                     if let path = project.path, project.isOnThisMac {
                         GlassIconButton(systemImage: "folder", accessibilityLabel: String(localized: "Show in Finder")) { Reveal.finder(path) }
                         GlassIconButton(systemImage: "terminal", accessibilityLabel: String(localized: "Open in Terminal")) { Reveal.terminal(path) }
@@ -56,6 +60,11 @@ struct ProjectContent: View {
                 }
                 if !project.sessions.isEmpty {
                     SessionsCard(project: project, now: now)
+                }
+                let shown = Set(project.sessions.compactMap { store.chat(for: $0)?.id })
+                let others = store.chats(for: project).filter { !shown.contains($0.id) }
+                if !others.isEmpty {
+                    ChatsCard(chats: Array(others.prefix(5)), now: now)
                 }
                 AboutCard(project: project, now: now)
             }
@@ -252,36 +261,96 @@ private struct ProgressCard: View {
 private struct SessionsCard: View {
     let project: Project
     let now: Date
+    @Environment(ProjectStore.self) private var store
 
     var body: some View {
         let live = Set(project.liveSessions(at: now).map(\.id))
         Card(padding: 20) {
             TrackedLabel(String(localized: "Sessions"), size: 11, color: Switchyard.textTertiary)
             ForEach(project.sessions.sorted { $0.updated > $1.updated }) { session in
-                let state = live.contains(session.id) ? session.state : .idle
-                HStack(alignment: .top, spacing: 12) {
-                    SymbolTile(symbol: state.symbol, swatch: state.swatch, size: 34)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(session.task ?? String(localized: "No task yet"))
-                            .font(.headline(17, weight: .semibold))
-                            .foregroundStyle(Switchyard.text)
-                            .lineLimit(2)
-                        if let message = session.message, state == .waiting {
-                            Text(message).font(.system(size: 13, weight: .semibold)).foregroundStyle(Swatch.amber.color)
-                        } else if let activity = session.activity, state == .working {
-                            Text(activity).font(.system(size: 13)).foregroundStyle(Switchyard.textSecondary).lineLimit(1)
+                // A Claude Desktop session opens its chat; a Terminal or other Mac's session is just a row.
+                if let chat = store.chat(for: session) {
+                    Button { Reveal.chat(chat) } label: { row(session, chat: chat, live: live) }
+                        .buttonStyle(.plain)
+                        .help(String(localized: "Open this chat in Claude"))
+                } else {
+                    row(session, chat: nil, live: live)
+                }
+            }
+        }
+    }
+
+    private func row(_ session: Session, chat: DesktopChats.Chat?, live: Set<String>) -> some View {
+        let state = live.contains(session.id) ? session.state : .idle
+        return HStack(alignment: .top, spacing: 12) {
+            SymbolTile(symbol: state.symbol, swatch: state.swatch, size: 34)
+            VStack(alignment: .leading, spacing: 3) {
+                // The chat's title in Claude Desktop names it best; the task says what it's on now.
+                Text(chat?.title ?? session.task ?? String(localized: "No task yet"))
+                    .font(.headline(17, weight: .semibold))
+                    .foregroundStyle(Switchyard.text)
+                    .lineLimit(2)
+                if chat?.title != nil, let task = session.task, state != .idle {
+                    Text(task).font(.system(size: 13)).foregroundStyle(Switchyard.textSecondary).lineLimit(1)
+                }
+                if let message = session.message, state == .waiting {
+                    Text(message).font(.system(size: 13, weight: .semibold)).foregroundStyle(Swatch.amber.color)
+                } else if let activity = session.activity, state == .working {
+                    Text(activity).font(.system(size: 13)).foregroundStyle(Switchyard.textSecondary).lineLimit(1)
+                }
+                Text([session.machine, session.worktree ?? String(localized: "Main folder")].compactMap { $0 }.joined(separator: " · "))
+                    .font(.code(11))
+                    .foregroundStyle(Switchyard.textTertiary)
+            }
+            Spacer(minLength: 8)
+            VStack(alignment: .trailing, spacing: 0) {
+                Text(Formats.ago(session.updated, from: now)).font(.display(20, weight: .heavy)).foregroundStyle(Switchyard.textSecondary)
+                TrackedLabel(state.label, size: 9, color: state == .idle ? Switchyard.textTertiary : state.swatch.color)
+            }
+            if chat != nil {
+                Image(systemName: "arrow.up.forward")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(Switchyard.textTertiary)
+                    .padding(.top, 4)
+            }
+        }
+        .padding(.top, 6)
+        .contentShape(.rect)
+    }
+}
+
+/// The project's other Claude Desktop chats, to pick one up again.
+private struct ChatsCard: View {
+    let chats: [DesktopChats.Chat]
+    let now: Date
+
+    var body: some View {
+        Card(padding: 20) {
+            TrackedLabel(String(localized: "Recent chats"), size: 11, color: Switchyard.textTertiary)
+            ForEach(chats) { chat in
+                Button { Reveal.chat(chat) } label: {
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Image(systemName: chat.isArchived ? "archivebox" : "bubble.left")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Switchyard.textTertiary)
+                            .frame(width: 18)
+                        Text(chat.title ?? String(localized: "Untitled chat"))
+                            .font(.headline(16, weight: .semibold))
+                            .foregroundStyle(chat.isArchived ? Switchyard.textSecondary : Switchyard.text)
+                            .lineLimit(1)
+                        Spacer(minLength: 8)
+                        if let date = chat.lastActivity {
+                            Text(Formats.ago(date, from: now)).font(.display(18, weight: .heavy)).foregroundStyle(Switchyard.textTertiary)
                         }
-                        Text([session.machine, session.worktree ?? String(localized: "Main folder")].compactMap { $0 }.joined(separator: " · "))
-                            .font(.code(11))
+                        Image(systemName: "arrow.up.forward")
+                            .font(.system(size: 12, weight: .bold))
                             .foregroundStyle(Switchyard.textTertiary)
                     }
-                    Spacer(minLength: 8)
-                    VStack(alignment: .trailing, spacing: 0) {
-                        Text(Formats.ago(session.updated, from: now)).font(.display(20, weight: .heavy)).foregroundStyle(Switchyard.textSecondary)
-                        TrackedLabel(state.label, size: 9, color: state == .idle ? Switchyard.textTertiary : state.swatch.color)
-                    }
+                    .padding(.vertical, 3)
+                    .contentShape(.rect)
                 }
-                .padding(.top, 6)
+                .buttonStyle(.plain)
+                .help(String(localized: "Open this chat in Claude"))
             }
         }
     }

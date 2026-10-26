@@ -54,8 +54,25 @@ struct MenuBarContent: View {
             } else {
                 VStack(spacing: 6) {
                     ForEach(live.prefix(8)) { project in
-                        Button { open(project.id) } label: { row(project, now: now) }
-                            .buttonStyle(.plain)
+                        HStack(alignment: .center, spacing: 6) {
+                            Button { open(project.id) } label: { row(project, now: now) }
+                                .buttonStyle(.plain)
+                            // Straight to the chat, where whatever needs you gets answered: only the live
+                            // session's own, never an older chat in the same folder.
+                            if let chat = store.liveChat(for: project) {
+                                Button { Reveal.chat(chat) } label: {
+                                    Image(systemName: "bubble.left.and.text.bubble.right")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundStyle(Switchyard.textSecondary)
+                                        .frame(width: 34, height: 34)
+                                        .contentShape(.rect)
+                                }
+                                .buttonStyle(.plain)
+                                .help(String(localized: "Open “\(chat.title ?? project.name)” in Claude"))
+                            }
+                        }
+                        .padding(10)
+                        .background(Switchyard.surface, in: .rect(cornerRadius: 14, style: .continuous))
                     }
                 }
             }
@@ -117,8 +134,6 @@ struct MenuBarContent: View {
                     .multilineTextAlignment(.leading)
             }
         }
-        .padding(10)
-        .background(Switchyard.surface, in: .rect(cornerRadius: 14, style: .continuous))
         .contentShape(.rect)
     }
 }

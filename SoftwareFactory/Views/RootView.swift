@@ -105,6 +105,9 @@ struct ProjectMenuItems: View {
     @Environment(ProjectStore.self) private var store
 
     var body: some View {
+        if let chat = store.bestChat(for: project) {
+            Button("Open Chat in Claude", systemImage: "bubble.left.and.text.bubble.right") { Reveal.chat(chat) }
+        }
         if let path = project.path, project.isOnThisMac {
             Button("Show in Finder", systemImage: "folder") { Reveal.finder(path) }
             Button("Open in Terminal", systemImage: "terminal") { Reveal.terminal(path) }

@@ -17,6 +17,11 @@ extension ProjectStore {
               let sessionID = payload["session_id"] as? String,
               let id = projectID(forPath: cwd, create: true, machine: machine) else { return nil }
         let now = Date.now
+        // A session new to the board may be a Claude Desktop chat: find it, to link to it.
+        if machine == nil, chatsBySession[sessionID] == nil, chatLookups[sessionID, default: 0] < 3 {
+            chatLookups[sessionID, default: 0] += 1
+            refreshDesktopChats(after: .seconds(2))
+        }
 
         return update(id) { p in
             let earlier = Set(p.events.map(\.id))

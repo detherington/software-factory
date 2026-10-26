@@ -23,6 +23,12 @@ final class ProjectStore {
     private(set) var accessToken = ProjectStore.loadToken()
     /// Other Macs, and when each last reported.
     private(set) var machines: [String: Date] = [:]
+    /// Claude Desktop's Code chats on this Mac, newest first, and by the Claude Code session id they run.
+    private(set) var desktopChats: [DesktopChats.Chat] = []
+    private(set) var chatsBySession: [String: DesktopChats.Chat] = [:]
+    @ObservationIgnored private var chatRefresh: Task<Void, Never>?
+    /// How often each session has been looked for among the chats: Terminal sessions never turn up.
+    @ObservationIgnored var chatLookups: [String: Int] = [:]
     private(set) var isDiscovering = false
     private(set) var lastDiscovery: Date?
 
@@ -314,11 +320,56 @@ final class ProjectStore {
         scheduleSave()
     }
 
+    // MARK: - Claude Desktop chats
+
+    /// Reads Claude Desktop's chats again, after `delay`: a new session's chat file can land a moment
+    /// after its first hook.
+    func refreshDesktopChats(after delay: Duration = .zero) {
+        chatRefresh?.cancel()
+        chatRefresh = Task { [weak self] in
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled else { return }
+            let chats = await Task.detached(priority: .utility) { DesktopChats.scan() }.value
+                .sorted { ($0.lastActivity ?? .distantPast) > ($1.lastActivity ?? .distantPast) }
+            self?.desktopChats = chats
+            self?.chatsBySession = Dictionary(chats.compactMap { chat in chat.cliSessionID.map { ($0, chat) } }, uniquingKeysWith: { a, _ in a })
+        }
+    }
+
+    /// The Claude Desktop chat a session runs in, if it's on this Mac and in the desktop app.
+    func chat(for session: Session) -> DesktopChats.Chat? {
+        session.machine == nil ? chatsBySession[session.id] : nil
+    }
+
+    /// The project's Claude Desktop chats on this Mac, worktrees included, newest first.
+    func chats(for project: Project) -> [DesktopChats.Chat] {
+        guard let path = project.path, project.isOnThisMac else { return [] }
+        return desktopChats.filter { chat in
+            guard let cwd = chat.cwd else { return false }
+            let root = ProjectPath.withoutWorktree(cwd)
+            return root == path || root.hasPrefix(path + "/")
+        }
+    }
+
+    /// The chat a project's live session runs in, if that session is a Claude Desktop chat.
+    func liveChat(for project: Project) -> DesktopChats.Chat? {
+        project.liveSessions(at: now).lazy.compactMap(chat(for:)).first
+    }
+
+    /// The chat to open for a project: its live session's, else its latest session's, else its latest chat.
+    func bestChat(for project: Project) -> DesktopChats.Chat? {
+        let sessions = project.liveSessions(at: now) + project.sessions.sorted { $0.updated > $1.updated }
+        if let chat = sessions.lazy.compactMap(chat(for:)).first { return chat }
+        let chats = chats(for: project)
+        return chats.first { !$0.isArchived } ?? chats.first
+    }
+
     // MARK: - Discovery
 
     func discover() {
         guard !isDiscovering else { return }
         isDiscovering = true
+        refreshDesktopChats()
         Task {
             let found = await Discovery.scan()
             merge(found)

@@ -4,6 +4,13 @@ A status board for every coding project on this Mac: what's being worked on, wha
 
 - **The board.** Projects that need you come first, as full-bleed cards in their state's color. Every other project is a card with its three-letter code, like an airport code: TDR, EMN, LTC.
 - **Project pages.** How long it's been working or waiting, the milestone and its steps, live sessions (worktrees included), and a timeline of reports, sessions and commits.
+- **Open the chat in Claude.** For work done in Claude Desktop, you can jump straight to the chat:
+  - **Project page:** a chat button sits beside Finder and Terminal. It opens the live session's chat, or else the project's latest chat.
+  - **Sessions:** rows show the chat's title and open it when clicked. A Recent chats card lists the project's other chats.
+  - **Menus:** card and sidebar menus have "Open Chat in Claude".
+  - **Menu bar:** each live project has a chat button.
+
+  It works by reading the file Claude Desktop keeps for each Code chat, in `~/Library/Application Support/Claude/claude-code-sessions`, to match a session's ID to its chat. It opens the chat with `claude://code/continue?session=local_…`. Terminal sessions and other Macs' sessions have no chat to open here.
 - **Activity.** Every project's timeline, merged.
 - **Menu bar and Dock.** A raised hand and a count in the menu bar when something needs you; a bolt while work is under way. The Dock icon shows how many projects need you.
 - **Other Macs too.** Turn on Settings › Other Macs and paste one command into Terminal on another Mac. Its Claude Code sessions then report here too, labeled with that Mac's name.
@@ -196,7 +203,7 @@ Every field is optional; only what's sent changes.
 - **`kind`**: `ios`, `mac`, `apple`, `game`, `web`, `site`, `cloud`, `tool`, `library` or `other`. It picks the project's symbol, and `symbol` sets any SF Symbol instead.
 - **`clear`**: empties fields: `task`, `note`, `milestone`, `progress`, `steps`, `summary` or `version`.
 
-The reply is the project as the board shows it: `state` and `label` ("Needs you"), `since`, `headline`, `steps`, `sessions` and the last five events. Errors come back as `{"error": "…"}` with a 400 or 404.
+The reply is the project as the board shows it: `state` and `label` ("Needs you"), `since`, `headline`, `steps`, `sessions`, `chat` (the Claude Desktop chat to open: `title` and its `claude://` `url`) and the last five events. Errors come back as `{"error": "…"}` with a 400 or 404.
 
 ## Data
 

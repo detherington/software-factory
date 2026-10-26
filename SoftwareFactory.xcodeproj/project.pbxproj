@@ -15,6 +15,7 @@
 		2DF2B9F303A2D6B4C6A6936B /* Timeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4717CD16391BD36BDBFB83C9 /* Timeline.swift */; };
 		32AEB4813059494CFD9F9121 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F101127FEA2EA48928C7D6C /* Theme.swift */; };
 		3CA1D9593DF58336F370D7F6 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02DC087BA4748B349A065F2E /* main.swift */; };
+		5102FCA536E81E033CA94CD1 /* DesktopChats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40CE93F5B9EE1786B5009D1C /* DesktopChats.swift */; };
 		51D130A3540C8CC1C0C3B9FD /* ClaudeSetup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DE41ABF704054893FFCD764 /* ClaudeSetup.swift */; };
 		5BF27930AC61A411E263B3AC /* ProjectPath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EBEF5BC108AC432DBE02618 /* ProjectPath.swift */; };
 		60D16C38456DE2A31475DA23 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0643822BA032DA6D23220A7A /* RootView.swift */; };
@@ -66,6 +67,7 @@
 		1DE41ABF704054893FFCD764 /* ClaudeSetup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeSetup.swift; sourceTree = "<group>"; };
 		23AA7671D5A8D6B9C0D9E3B8 /* ServerController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerController.swift; sourceTree = "<group>"; };
 		3337D5EF310805146783373B /* Snapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Snapshot.swift; sourceTree = "<group>"; };
+		40CE93F5B9EE1786B5009D1C /* DesktopChats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesktopChats.swift; sourceTree = "<group>"; };
 		4717CD16391BD36BDBFB83C9 /* Timeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Timeline.swift; sourceTree = "<group>"; };
 		47DEA1EB46AA6BF8D7B327FD /* Navigator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Navigator.swift; sourceTree = "<group>"; };
 		5BC811928D0E9E9C6867A97E /* ClaudeHook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeHook.swift; sourceTree = "<group>"; };
@@ -174,6 +176,7 @@
 		C0A78F51FCA70A845654103B /* Store */ = {
 			isa = PBXGroup;
 			children = (
+				40CE93F5B9EE1786B5009D1C /* DesktopChats.swift */,
 				8B75C7F6A32912C804347908 /* Discovery.swift */,
 				BE71367B597BD9790D2529D7 /* ProjectStore.swift */,
 			);
@@ -322,6 +325,7 @@
 				0CD5D2850449555885881992 /* ClaudeHook.swift in Sources */,
 				51D130A3540C8CC1C0C3B9FD /* ClaudeSetup.swift in Sources */,
 				DA699A2014B4EB15AB27D62C /* Components.swift in Sources */,
+				5102FCA536E81E033CA94CD1 /* DesktopChats.swift in Sources */,
 				8D85FDE9A60941EC07074EEA /* Discovery.swift in Sources */,
 				C445B28ECF6951B4E26C9E8D /* Formats.swift in Sources */,
 				10792483EAC985226EA29329 /* HTTPServer.swift in Sources */,

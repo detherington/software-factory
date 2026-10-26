@@ -36,6 +36,12 @@ enum Reveal {
         NSWorkspace.shared.open(url)
     }
 
+    /// Opens a chat in Claude Desktop.
+    static func chat(_ chat: DesktopChats.Chat) {
+        guard let url = chat.url else { return }
+        NSWorkspace.shared.open(url)
+    }
+
     static func copy(_ text: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)

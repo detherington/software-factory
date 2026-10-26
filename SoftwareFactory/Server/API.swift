@@ -213,7 +213,14 @@ struct ProjectDTO: Encodable {
     var lastActivity: Date
     var lastCommit: Commit?
     var hidden: Bool
+    /// The Claude Desktop chat to open for it, on this Mac: its title and claude:// link.
+    var chat: Chat?
     var events: [Event]?
+
+    struct Chat: Encodable {
+        var title: String?
+        var url: String
+    }
 
     @MainActor
     init(_ p: Project, at now: Date, events limit: Int) {
@@ -242,6 +249,7 @@ struct ProjectDTO: Encodable {
         lastActivity = p.lastActivity
         lastCommit = p.lastCommit
         hidden = p.hidden
+        chat = ProjectStore.shared.bestChat(for: p).flatMap { chat in chat.url.map { Chat(title: chat.title, url: $0.absoluteString) } }
         events = limit > 0 ? Array(p.events.prefix(limit)) : nil
     }
 }
