@@ -44,7 +44,13 @@ private struct Sidebar: View {
                 ForEach(store.resting) { SidebarRow(project: $0).tag(SidebarItem.project($0.id)) }
             }
         }
-        .safeAreaInset(edge: .bottom) { ServerStatusLine().padding(12) }
+        .safeAreaInset(edge: .bottom) {
+            VStack(alignment: .leading, spacing: 6) {
+                ServerStatusLine()
+                SyncStatusLine()
+            }
+            .padding(12)
+        }
     }
 }
 
@@ -96,6 +102,28 @@ struct ServerStatusLine: View {
         .font(.system(size: 11, weight: .medium))
         .foregroundStyle(Switchyard.textTertiary)
         .help("Projects report their status to this address.")
+    }
+}
+
+/// "iCloud · Ratatoskr 1 m": which Macs this board is synced with, and how recently.
+struct SyncStatusLine: View {
+    @Environment(ProjectStore.self) private var store
+
+    var body: some View {
+        if store.syncsWithOtherMacs {
+            let boards = store.peers.values.sorted { $0.machineName < $1.machineName }
+            HStack(spacing: 6) {
+                Image(systemName: "icloud").font(.system(size: 10, weight: .bold))
+                Text(boards.isEmpty
+                     ? String(localized: "No other Macs yet")
+                     : boards.map { "\($0.machineName) \(Formats.ago($0.updated, from: store.now))" }.joined(separator: " · "))
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(Switchyard.textTertiary)
+            .help("Synced through iCloud Drive with your other Macs.")
+        }
     }
 }
 

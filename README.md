@@ -13,7 +13,8 @@ A status board for every coding project on this Mac: what's being worked on, wha
   It works by reading the file Claude Desktop keeps for each Code chat, in `~/Library/Application Support/Claude/claude-code-sessions`, to match a session's ID to its chat. It opens the chat with `claude://code/continue?session=local_…`. Terminal sessions and other Macs' sessions have no chat to open here.
 - **Activity.** Every project's timeline, merged.
 - **Menu bar and Dock.** A raised hand and a count in the menu bar when something needs you; a bolt while work is under way. The Dock icon shows how many projects need you.
-- **Other Macs too.** Turn on Settings › Other Macs and paste one command into Terminal on another Mac. Its Claude Code sessions then report here too, labeled with that Mac's name.
+- **One board on all your Macs.** Run Software Factory on each Mac and turn on Settings › Sync. Each board shares its projects through iCloud Drive and shows the others' with its own, labeled with each Mac's name.
+- **Or report from a Mac that doesn't run it.** Turn on Settings › Other Macs and paste one command into Terminal on the other Mac. Its Claude Code sessions then report over the network, labeled with that Mac's name.
 - **Finds projects by itself.** It finds every folder Claude Code has had a session in, from the transcripts in `~/.claude/projects`. From each folder it reads the README's first paragraph, the git branch, the last 15 commits and the kind of project. It looks again every three minutes.
 
 ## Install
@@ -96,9 +97,31 @@ It prints nothing and always exits 0, so a closed app never gets in a session's 
 
 To have Claude report milestones, steps and blockers too, run `factory instructions --install`. It puts a status-board section in `~/.claude/CLAUDE.md`, between `<!-- software-factory -->` markers, so running it again replaces the section instead of adding another, and the rest of the file stays as it is. On a connected Mac, the section names the board's address and that Mac's name. `factory instructions` on its own prints the section, as does Settings › Copy CLAUDE.md Section here, for pasting into a project's CLAUDE.md.
 
+## Sync between Macs
+
+Each Mac can run its own board, and they share through iCloud Drive:
+
+1. **Install the app on each Mac:** clone this repository and run `scripts/install.sh`.
+2. **On each Mac, in Settings:**
+   - Turn on **Sync**.
+   - Click Claude Code › **Install** for the hooks, and run `factory instructions --install`.
+   - Give the Mac a name if its computer name isn't a good label.
+
+How it works:
+
+- **Files.** Each board writes its own Mac's projects to `iCloud Drive/Software Factory/Boards/<this Mac's id>.json`, at most every five seconds, and reads the other Macs' files every five seconds. A Mac only ever writes its own file, so the two never conflict. No Apple Developer account or iCloud entitlement is involved: iCloud Drive is just a folder to the app.
+- **Merging.**
+  - A project on several Macs (same id, repository or name) is one card, and each session and timeline entry carries its Mac's name.
+  - For what was reported (state, task, note, milestone, progress, steps, version), the newest report wins, wherever it was made.
+  - Commits both Macs found appear once.
+- **Delays.** Changes arrive as fast as iCloud Drive syncs, usually seconds, sometimes a minute. A Mac that's asleep or away keeps its last state, and its sessions lapse as they would anyway.
+- **Not syncing the network setup too.** A Mac that runs its own board should report to it, not over the network, or its sessions show twice. On that Mac, run `factory disconnect` before installing its hooks.
+
+The sidebar shows which Macs the board is synced with and how recently, as does Settings › Sync.
+
 ## Other Macs
 
-Another Mac's Claude Code sessions can report to this board over your network:
+A Mac that doesn't run the app can still report to this board over your network:
 
 1. **On this Mac:** in Settings › Other Macs, turn on "Accept reports from other Macs", then click Copy Setup Command.
 2. **On the other Mac:** paste the command into Terminal. It downloads the `factory` command from this board into `~/.local/bin`. Then `factory connect` checks the token, saves the board's address in `~/.config/software-factory.json` (readable only by you), and installs that Mac's hooks.

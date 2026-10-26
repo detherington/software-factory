@@ -179,6 +179,8 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
     /// The state the last report set. What the board shows is `state(at:)`, which live sessions override.
     var reported: ProjectState = .idle
     var reportedAt: Date
+    /// When a report (or a session ending one) last changed what was reported. Across Macs the latest wins.
+    var lastReport: Date?
     var task: String?
     var note: String?
     var milestone: String?
@@ -234,6 +236,7 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
         let created = try c.decodeIfPresent(Date.self, forKey: .created) ?? .now
         self.created = created
         reportedAt = try c.decodeIfPresent(Date.self, forKey: .reportedAt) ?? created
+        lastReport = try c.decodeIfPresent(Date.self, forKey: .lastReport)
         lastActivity = try c.decodeIfPresent(Date.self, forKey: .lastActivity) ?? created
         hidden = try c.decodeIfPresent(Bool.self, forKey: .hidden) ?? false
     }

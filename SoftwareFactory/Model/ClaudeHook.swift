@@ -96,11 +96,11 @@ extension ProjectStore {
                 set(.idle)
                 s.message = nil
                 // A report of "working" ends with the turn, unless the project says otherwise.
-                if p.reported == .working { p.reported = .idle; p.reportedAt = now }
+                if p.reported == .working { p.reported = .idle; p.reportedAt = now; p.lastReport = now }
 
             case "SessionEnd":
                 p.sessions.removeAll { $0.id == sessionID }
-                if p.sessions.isEmpty, p.reported == .working { p.reported = .idle; p.reportedAt = now }
+                if p.sessions.isEmpty, p.reported == .working { p.reported = .idle; p.reportedAt = now; p.lastReport = now }
                 p.lastActivity = now
                 return
 

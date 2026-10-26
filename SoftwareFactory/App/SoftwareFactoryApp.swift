@@ -49,13 +49,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         signal(SIGTERM, SIG_IGN)
         termination = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
         termination?.setEventHandler {
-            MainActor.assumeIsolated { ProjectStore.shared.saveNow() }
+            MainActor.assumeIsolated {
+                ProjectStore.shared.saveNow()
+                ProjectStore.shared.writeSyncNow()
+            }
             exit(0)
         }
         termination?.resume()
 
         let store = ProjectStore.shared
         store.startClock()
+        store.startSync()
         ServerController.shared.start(store: store)
         // Look for projects now and every few minutes: new folders, commits, READMEs.
         discoveryLoop = Task {
@@ -71,6 +75,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         ProjectStore.shared.saveNow()
+        ProjectStore.shared.writeSyncNow()
     }
 }
 

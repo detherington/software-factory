@@ -9,7 +9,33 @@ import os
 final class ProjectStore {
     static let shared = ProjectStore()
 
+    /// Every project on the board: this Mac's own, with the other Macs' boards merged in.
     private(set) var projects: [String: Project] = [:]
+    /// This Mac's own projects: what its hooks, reports and discovery say. Saved here, and shared with
+    /// the other Macs through iCloud Drive.
+    @ObservationIgnored private(set) var local: [String: Project] = [:]
+    /// The other Macs' boards, by machine id, from iCloud Drive.
+    private(set) var peers: [String: SyncFolder.Board] = [:]
+    @ObservationIgnored private var peerDates: [String: Date] = [:]
+    @ObservationIgnored private var syncLoop: Task<Void, Never>?
+    @ObservationIgnored private var syncWrite: Task<Void, Never>?
+    @ObservationIgnored private var lastSyncWrite = Date.distantPast
+    /// Whether this board is shared with the other Macs' through iCloud Drive.
+    var syncsWithOtherMacs = UserDefaults.standard.bool(forKey: "FactorySyncsWithOtherMacs") {
+        didSet {
+            UserDefaults.standard.set(syncsWithOtherMacs, forKey: "FactorySyncsWithOtherMacs")
+            syncsWithOtherMacs ? startSync() : stopSync()
+        }
+    }
+    /// This Mac's name on the other Macs' boards.
+    var machineName = UserDefaults.standard.string(forKey: "FactoryMachineName") ?? Host.current().localizedName ?? "Mac" {
+        didSet {
+            UserDefaults.standard.set(machineName, forKey: "FactoryMachineName")
+            scheduleSyncWrite()
+        }
+    }
+    /// This Mac's board file in iCloud Drive is named for it.
+    @ObservationIgnored let machineID = ProjectStore.loadMachineID()
     /// The board's clock: ticks every 20 seconds so relative times and stale sessions move on.
     private(set) var now = Date.now
     var serverStatus: ServerStatus = .starting
@@ -156,7 +182,7 @@ final class ProjectStore {
     func projectID(forPath raw: String, create: Bool, machine: String? = nil) -> String? {
         let root = root(for: raw, machine: machine)
         guard ProjectPath.isProject(root) else { return nil }
-        let match = projects.values
+        let match = local.values
             .filter { project in
                 guard let path = project.path else { return false }
                 return root == path || root.hasPrefix(path + "/")
@@ -164,15 +190,16 @@ final class ProjectStore {
             .max { ($0.path?.count ?? 0) < ($1.path?.count ?? 0) }
         if let match { return match.id }
         let name = (root as NSString).lastPathComponent
-        if machine != nil, let same = projects.values.first(where: { project in
+        if machine != nil, let same = local.values.first(where: { project in
             ((project.path as NSString?)?.lastPathComponent ?? project.name).caseInsensitiveCompare(name) == .orderedSame
         }) {
             return same.id
         }
         guard create else { return nil }
         let project = Project(id: uniqueID(for: name), name: name, path: root, now: now)
-        projects[project.id] = project
+        local[project.id] = project
         scheduleSave()
+        rebuild()
         return project.id
     }
 
@@ -180,7 +207,7 @@ final class ProjectStore {
         let base = Slug.make(name)
         var id = base
         var n = 2
-        while projects[id] != nil {
+        while local[id] != nil {
             id = "\(base)-\(n)"
             n += 1
         }
@@ -190,12 +217,26 @@ final class ProjectStore {
     /// Changes one project in place and saves.
     @discardableResult
     func update(_ id: String, _ change: (inout Project) -> Void) -> Project? {
-        guard var project = projects[id] else { return nil }
+        guard var project = local[id] ?? localCopy(of: id) else { return nil }
         change(&project)
-        projects[id] = project
+        local[id] = project
         scheduleSave()
+        rebuild()
         refreshBadge()
-        return project
+        return projects[id]
+    }
+
+    /// A project that so far is only on another Mac's board, made this Mac's too so it can change
+    /// here: its name and where it is, without the other Mac's sessions or timeline.
+    private func localCopy(of id: String) -> Project? {
+        guard let theirs = projects[id] else { return nil }
+        var copy = Project(id: id, name: theirs.name, path: theirs.path, now: now)
+        copy.code = theirs.code
+        copy.kind = theirs.kind
+        copy.repo = theirs.repo
+        copy.lastActivity = theirs.lastActivity
+        copy.reportedAt = theirs.reportedAt
+        return copy
     }
 
     /// Applies a report. `explicitID` comes from the URL (`POST /api/projects/{id}`).
@@ -271,6 +312,7 @@ final class ProjectStore {
                 p.reported = state
             }
 
+            p.lastReport = now
             for field in report.clear ?? [] {
                 switch field.lowercased() {
                 case "task": p.task = nil
@@ -303,9 +345,10 @@ final class ProjectStore {
     }
 
     private func create(named name: String, id: String, path: String?, machine: String?) -> String {
-        let id = projects[id] == nil ? id : uniqueID(for: name)
+        let id = local[id] == nil ? id : uniqueID(for: name)
         let project = Project(id: id, name: name, path: path.map { root(for: $0, machine: machine) }, now: now)
-        projects[id] = project
+        local[id] = project
+        rebuild()
         return id
     }
 
@@ -316,7 +359,8 @@ final class ProjectStore {
     /// Forgets a project for good. Discovery brings it back if Claude Code still has sessions there,
     /// so the board hides projects instead.
     func remove(_ id: String) {
-        projects[id] = nil
+        local[id] = nil
+        rebuild()
         scheduleSave()
     }
 
@@ -415,6 +459,106 @@ final class ProjectStore {
         }
     }
 
+    // MARK: - Other Macs' boards
+
+    private static func loadMachineID() -> String {
+        if let saved = UserDefaults.standard.string(forKey: "FactoryMachineID") { return saved }
+        let id = UUID().uuidString
+        UserDefaults.standard.set(id, forKey: "FactoryMachineID")
+        return id
+    }
+
+    /// Reads the other Macs' boards from iCloud Drive every few seconds, and shares this one.
+    func startSync() {
+        guard syncsWithOtherMacs, syncLoop == nil else { return }
+        syncLoop = Task { [weak self] in
+            while !Task.isCancelled, let self {
+                await self.readPeers()
+                try? await Task.sleep(for: .seconds(5))
+            }
+        }
+        scheduleSyncWrite()
+    }
+
+    private func stopSync() {
+        syncLoop?.cancel()
+        syncLoop = nil
+        peers = [:]
+        peerDates = [:]
+        rebuild()
+    }
+
+    private func readPeers() async {
+        let (machineID, known) = (self.machineID, peerDates)
+        let found = await Task.detached(priority: .utility) { SyncFolder.peers(excluding: machineID, known: known) }.value
+        guard syncsWithOtherMacs else { return }
+        var changed = false
+        for peer in found {
+            guard let board = peer.board else { continue }
+            peers[peer.machineID] = board
+            peerDates[peer.machineID] = peer.modified
+            changed = true
+        }
+        // A Mac whose file is gone has stopped sharing.
+        for id in peers.keys where !found.contains(where: { $0.machineID == id }) {
+            peers[id] = nil
+            peerDates[id] = nil
+            changed = true
+        }
+        if changed {
+            rebuild()
+            refreshBadge()
+        }
+    }
+
+    /// Shares this board, at most every five seconds: each write goes up to iCloud.
+    func scheduleSyncWrite() {
+        guard syncsWithOtherMacs, SyncFolder.isAvailable, syncWrite == nil else { return }
+        let wait = max(0, 5 - Date.now.timeIntervalSince(lastSyncWrite))
+        syncWrite = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(wait))
+            guard let self, !Task.isCancelled else { return }
+            self.syncWrite = nil
+            self.lastSyncWrite = .now
+            let board = SyncFolder.Board(machineID: machineID, machineName: machineName, updated: .now,
+                                         projects: local.values.sorted { $0.id < $1.id })
+            await Task.detached(priority: .utility) {
+                do { try SyncFolder.write(board) } catch {}
+            }.value
+        }
+    }
+
+    /// Shares this board now, on the way out.
+    func writeSyncNow() {
+        guard syncsWithOtherMacs, SyncFolder.isAvailable else { return }
+        try? SyncFolder.write(SyncFolder.Board(machineID: machineID, machineName: machineName, updated: .now,
+                                               projects: local.values.sorted { $0.id < $1.id }))
+    }
+
+    /// The merged board: this Mac's projects, with each other Mac's projects joined to the same project
+    /// here (by id, repository or name) or added as their own.
+    private func rebuild() {
+        var theirs: [String: [(project: Project, machine: String)]] = [:]
+        for board in peers.values {
+            for project in board.projects {
+                theirs[key(for: project), default: []].append((project, board.machineName))
+            }
+        }
+        var merged: [String: Project] = [:]
+        for id in Set(local.keys).union(theirs.keys) {
+            merged[id] = BoardMerge.combine(local[id], theirs[id] ?? [], thisMac: machineName)
+        }
+        projects = merged
+    }
+
+    /// Which project here another Mac's project is.
+    private func key(for project: Project) -> String {
+        if local[project.id] != nil { return project.id }
+        if let repo = project.repo, let same = local.values.first(where: { $0.repo == repo }) { return same.id }
+        if let same = local.values.first(where: { $0.name.caseInsensitiveCompare(project.name) == .orderedSame }) { return same.id }
+        return project.id
+    }
+
     /// The Dock icon counts the projects waiting on you.
     func refreshBadge() {
         let waiting = count(.waiting)
@@ -434,15 +578,16 @@ final class ProjectStore {
         guard let data = try? Data(contentsOf: fileURL) else { return }
         do {
             let saved = try Self.decoder.decode(Saved.self, from: data)
-            projects = Dictionary(saved.projects.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+            local = Dictionary(saved.projects.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
             machines = saved.machines ?? [:]
             // Earlier versions took the app's notes for tasks ("Linked sessions now…"): drop them.
-            for id in Array(projects.keys) {
-                projects[id]?.events.removeAll { HookText.isAppNote($0.title) }
-                for index in projects[id]?.sessions.indices ?? 0..<0 where HookText.isAppNote(projects[id]?.sessions[index].task ?? "") {
-                    projects[id]?.sessions[index].task = nil
+            for id in Array(local.keys) {
+                local[id]?.events.removeAll { HookText.isAppNote($0.title) }
+                for index in local[id]?.sessions.indices ?? 0..<0 where HookText.isAppNote(local[id]?.sessions[index].task ?? "") {
+                    local[id]?.sessions[index].task = nil
                 }
             }
+            rebuild()
         } catch {
             log.error("Couldn't read the board: \(error.localizedDescription, privacy: .public)")
             // Keep the unreadable file beside the new one rather than overwrite it.
@@ -462,8 +607,9 @@ final class ProjectStore {
     func saveNow() {
         do {
             try FileManager.default.createDirectory(at: dataDirectory, withIntermediateDirectories: true)
-            let data = try Self.encoder.encode(Saved(projects: projects.values.sorted { $0.id < $1.id }, machines: machines))
+            let data = try Self.encoder.encode(Saved(projects: local.values.sorted { $0.id < $1.id }, machines: machines))
             try data.write(to: fileURL, options: .atomic)
+            scheduleSyncWrite()
         } catch {
             log.error("Couldn't save the board: \(error.localizedDescription, privacy: .public)")
         }

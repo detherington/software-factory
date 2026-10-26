@@ -55,6 +55,7 @@ struct SettingsView: View {
                 Text("The hooks go in ~/.claude/settings.json and report every session's state: working, waiting for you, finished. The CLAUDE.md section asks Claude to report milestones, steps and blockers too. A backup of your settings is kept beside them.")
             }
 
+            SyncSection()
             OtherMacsSection(message: $message)
 
             Section {
@@ -127,6 +128,46 @@ struct SettingsView: View {
         }
         hooksInstalled = ClaudeSetup.isInstalled()
         toolLinked = CommandLineTool.isLinked
+    }
+}
+
+/// Sharing this board with the other Macs that run Software Factory, through iCloud Drive.
+private struct SyncSection: View {
+    @Environment(ProjectStore.self) private var store
+
+    var body: some View {
+        @Bindable var store = store
+        Section {
+            Toggle("Sync with your other Macs", isOn: $store.syncsWithOtherMacs)
+                .disabled(!SyncFolder.isAvailable && !store.syncsWithOtherMacs)
+            LabeledContent("This Mac's name") {
+                TextField("Name", text: $store.machineName)
+                    .labelsHidden()
+                    .frame(width: 200)
+            }
+            if store.syncsWithOtherMacs {
+                if store.peers.isEmpty {
+                    LabeledContent("Other Macs") {
+                        Text("None yet").foregroundStyle(Switchyard.textSecondary)
+                    }
+                }
+                ForEach(store.peers.values.sorted { $0.machineName < $1.machineName }, id: \.machineID) { board in
+                    LabeledContent(board.machineName) {
+                        Text("Synced \(Formats.ago(board.updated, from: store.now)) ago · \(board.projects.count) projects")
+                            .foregroundStyle(Switchyard.textSecondary)
+                    }
+                }
+                LabeledContent("Folder") {
+                    Button("Show in Finder") { NSWorkspace.shared.open(SyncFolder.folder) }
+                }
+            }
+        } header: {
+            Text("Sync")
+        } footer: {
+            Text(SyncFolder.isAvailable
+                 ? "Each Mac that runs Software Factory with this on shares its board through iCloud Drive, in a Software Factory folder, and shows the others' with its own, labeled with their names. Changes take a few seconds to a minute to arrive. A Mac that runs its own board should report to it: on that Mac, run factory disconnect, then install the hooks in its Settings."
+                 : "Turn on iCloud Drive in System Settings to sync with your other Macs.")
+        }
     }
 }
 
