@@ -1,0 +1,60 @@
+# Generate the Xcode project with:  xcodegen generate
+name: SoftwareFactory
+options:
+  bundleIdPrefix: com.darrell
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    DEAD_CODE_STRIPPING: YES
+    # A local tool that never leaves this Mac: signed to run locally, so it builds without an
+    # Apple Developer account in Xcode. Not sandboxed, because it reads ~/.claude and runs git.
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "-"
+    DEVELOPMENT_TEAM: ""
+    ENABLE_HARDENED_RUNTIME: NO
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    MACOSX_DEPLOYMENT_TARGET: "26.0"
+targets:
+  SoftwareFactory:
+    type: application
+    platform: macOS
+    sources:
+      - path: SoftwareFactory
+      - path: Shared
+    dependencies:
+      # The `factory` command-line tool ships inside the app (Contents/MacOS/factory);
+      # Settings › Command-Line Tool links it into ~/.local/bin.
+      - target: factory
+        embed: true
+        codeSign: false
+        copy:
+          destination: executables
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.darrell.softwarefactory
+        PRODUCT_NAME: Software Factory
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        GENERATE_INFOPLIST_FILE: NO
+    info:
+      path: SoftwareFactory/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: Software Factory
+        CFBundleName: Software Factory
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSApplicationCategoryType: public.app-category.developer-tools
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        NSHumanReadableCopyright: ""
+  factory:
+    type: tool
+    platform: macOS
+    sources:
+      - path: Factory
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_NAME: factory
+        PRODUCT_BUNDLE_IDENTIFIER: com.darrell.softwarefactory.cli

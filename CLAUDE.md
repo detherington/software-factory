@@ -1,0 +1,11 @@
+# Software Factory
+
+A native macOS status board (SwiftUI, Swift 6) for Darrell's coding projects, with a local HTTP API on 127.0.0.1:7720 that Claude Code hooks and the `factory` command report to. README.md documents the API, hooks and design.
+
+- It shares the family design language of Rounds, Sojourny and Emanata. Here it's called Switchyard (`SoftwareFactory/Design/`). Color means a project's state, everywhere: amber needs you, ember blocked, violet working (the tint), mint shipped, slate idle. Reuse the components rather than inventing new ones.
+- **Project:** XcodeGen (`project.yml`), so run `xcodegen generate` after adding files. Builds are signed to run locally; no team or profile is needed. Not sandboxed: it reads `~/.claude/projects` and runs git.
+- **Build:** `xcodebuild -project SoftwareFactory.xcodeproj -scheme SoftwareFactory -derivedDataPath build/DerivedData build`. `scripts/install.sh` builds Release into ~/Applications and links `~/.local/bin/factory`.
+- **Test without touching the real board:** launch the Debug binary with `-FactoryDataDir <scratch folder> -FactoryPort 7799`, and point the CLI at it with `FACTORY_URL=http://127.0.0.1:7799`. Simulate Claude Code by posting hook JSON (`session_id`, `cwd`, `hook_event_name`, …) to `/api/hooks/claude`. Use `printf '%s'`, not `echo`: zsh's echo turns `\n` into a raw newline and breaks the JSON.
+- **Other Macs:** test with this Mac's LAN IP (`ipconfig getifaddr en0`) instead of 127.0.0.1; the board then treats it as another Mac. Launch the test copy with `-FactoryAcceptsOtherMacs YES -FactoryAccessToken <24+ chars>`. Run `factory connect` with `HOME=<scratch folder>`: the CLI's config and Claude settings paths follow `$HOME`, so your real ones stay untouched.
+- **Seeing the UI:** `screencapture` and Accessibility are blocked from the shell. In Debug builds, `POST /api/debug/snapshot?dir=…` renders the screens to PNGs with ImageRenderer; glass controls come out blank.
+- **Reporting:** this project reports to its own board. Use `factory working "…"`, `factory steps …`, and `factory done "…"` when something ships.
