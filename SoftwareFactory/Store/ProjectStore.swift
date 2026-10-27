@@ -415,12 +415,53 @@ final class ProjectStore {
         return chats.first { !$0.isArchived } ?? chats.first
     }
 
+    // MARK: - Background work from transcripts
+
+    /// Sessions on this Mac that look idle but have background work running, going by their
+    /// transcripts (work started while the board was down, or was a version that didn't know),
+    /// and sessions shown waiting on work that has since ended.
+    func checkBackgroundWork() {
+        let now = Date.now
+        let candidates = local.values.flatMap { project in
+            project.sessions
+                .filter { $0.machine == nil && ($0.state == .idle || $0.state == .background) && now.timeIntervalSince($0.updated) < BackgroundJob.timeout }
+                .map { (project: project.id, session: $0.id, transcript: $0.transcript) }
+        }
+        guard !candidates.isEmpty else { return }
+        Task {
+            let scans = await Task.detached(priority: .utility) {
+                candidates.compactMap { item -> (project: String, session: String, scan: TranscriptScan.Result)? in
+                    guard let path = item.transcript ?? TranscriptScan.path(forSession: item.session),
+                          let scan = TranscriptScan.scan(path, now: now) else { return nil }
+                    return (item.project, item.session, scan)
+                }
+            }.value
+            for item in scans {
+                // Leave a session that has moved on since.
+                guard let session = local[item.project]?.sessions.first(where: { $0.id == item.session }),
+                      session.state == .idle || session.state == .background else { continue }
+                let jobs = TranscriptScan.merge(session.background ?? [], with: item.scan, at: .now)
+                let state: ProjectState = jobs.isEmpty ? .idle : .background
+                guard jobs != (session.background ?? []) || state != session.state else { continue }
+                update(item.project) { p in
+                    guard let index = p.sessions.firstIndex(where: { $0.id == item.session }) else { return }
+                    p.sessions[index].background = jobs
+                    if p.sessions[index].state != state {
+                        p.sessions[index].state = state
+                        p.sessions[index].since = p.sessions[index].updated
+                    }
+                }
+            }
+        }
+    }
+
     // MARK: - Discovery
 
     func discover() {
         guard !isDiscovering else { return }
         isDiscovering = true
         refreshDesktopChats()
+        checkBackgroundWork()
         Task {
             let found = await Discovery.scan()
             merge(found)

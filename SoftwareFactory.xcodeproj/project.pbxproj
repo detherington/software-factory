@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		0192CDF2E43225AF66B0294E /* ProjectStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE71367B597BD9790D2529D7 /* ProjectStore.swift */; };
+		05B22A1F26CBA0B6F1B0B487 /* TranscriptScan.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A202333F926B3A9E29FFB0 /* TranscriptScan.swift */; };
 		09354B8B69F83A8AA31A2D49 /* factory in Embed Dependencies */ = {isa = PBXBuildFile; fileRef = F85458AA116C9B36E96F9338 /* factory */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		0CD5D2850449555885881992 /* ClaudeHook.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BC811928D0E9E9C6867A97E /* ClaudeHook.swift */; };
 		10792483EAC985226EA29329 /* HTTPServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8EBC3DB50A0488EA40BB9DD /* HTTPServer.swift */; };
@@ -93,6 +94,7 @@
 		E4F8FB5A083F5B981533DEE7 /* ProjectScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectScreen.swift; sourceTree = "<group>"; };
 		E592DD4274532C9C48A772D6 /* SoftwareFactoryApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoftwareFactoryApp.swift; sourceTree = "<group>"; };
 		EA150EE525FC15DC9D7EED22 /* BoardScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardScreen.swift; sourceTree = "<group>"; };
+		F1A202333F926B3A9E29FFB0 /* TranscriptScan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptScan.swift; sourceTree = "<group>"; };
 		F85458AA116C9B36E96F9338 /* factory */ = {isa = PBXFileReference; includeInIndex = 0; path = factory; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -114,6 +116,7 @@
 				A725CBC37F9F5C022AD6EF80 /* Formats.swift */,
 				977DD354A7F535B809419220 /* Project.swift */,
 				DAEE6799FC5F4B9F63B79D08 /* Report.swift */,
+				F1A202333F926B3A9E29FFB0 /* TranscriptScan.swift */,
 			);
 			path = Model;
 			sourceTree = "<group>";
@@ -351,6 +354,7 @@
 				9377BC6790651F2274B3AB40 /* SyncFolder.swift in Sources */,
 				32AEB4813059494CFD9F9121 /* Theme.swift in Sources */,
 				2DF2B9F303A2D6B4C6A6936B /* Timeline.swift in Sources */,
+				05B22A1F26CBA0B6F1B0B487 /* TranscriptScan.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

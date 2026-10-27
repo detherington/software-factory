@@ -159,7 +159,7 @@ enum API {
 
         A report (every field optional):
           {"path": "/Users/you/My App",      or "project": "my-app"
-           "state": "working",               working | waiting | blocked | done | idle
+           "state": "working",               working | waiting | background | blocked | done | idle
            "task": "Wiring up sync",
            "note": "Tests pass on iOS 27",
            "milestone": "TestFlight 0.2",

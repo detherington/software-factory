@@ -42,10 +42,11 @@ Switchyard is Rounds' Signal and Sojourny's Wayfinding, applied to a board of pr
   | Needs you | Amber `#FFC43D` | `hand.raised.fill` |
   | Blocked | Ember `#FF5533` | `exclamationmark.triangle.fill` |
   | Working (also the tint) | Violet `#9466FF` | `bolt.fill` |
+  | Background: waiting on work it started | Sky `#45AEFF` | `hourglass` |
   | Shipped | Mint `#3EDB98` | `checkmark` |
   | Idle | Slate `#8C95A8` | `moon.fill` |
 
-  Commits in the timeline are sky.
+  Commits in the timeline are sky too.
 - **Type is all SF Pro:**
   - Compressed and heavy for codes, counts and times.
   - Expanded, tracked capitals for labels.
@@ -67,7 +68,8 @@ A project's state comes from its sessions (via hooks) and from reports (via the 
 1. If any session is waiting on you (a permission prompt, a question, a plan to review), it **needs you**.
 2. Otherwise, if a report says it's **blocked**, it's blocked until a later report says otherwise.
 3. Otherwise, if any session is **working**, it's working.
-4. Otherwise it's whatever the last report said.
+4. Otherwise, if a session finished its turn but is waiting on work it started, it's in the **background**.
+5. Otherwise it's whatever the last report said.
 
 Sessions that go quiet stop counting: a working session after 20 minutes, a waiting one after 24 hours. A report of "working" lapses to idle after 45 quiet minutes or when the session's turn ends.
 
@@ -90,8 +92,14 @@ It prints nothing and always exits 0, so a closed app never gets in a session's 
 | `PreToolUse` (AskUserQuestion, ExitPlanMode) | Needs you: the question, or "A plan is ready for your review" |
 | `PostToolUse` | Working, with what it just did: "Editing Theme.swift", or a Bash command's description. TodoWrite, the desktop app's `update_plan`, and TaskCreate/TaskUpdate become the session's steps |
 | `Notification` (permission prompt) | Needs you, with Claude's message |
-| `Stop` | Idle; logs "Finished after 12 m" |
+| `Stop` | Idle, or Background while work the session started hasn't reported back; logs "Finished after 12 m" |
 | `SessionEnd` | Removes the session |
+
+**Background work.** A session that finishes its turn with work still running is shown as **Background** (sky), with what it's waiting on. That covers:
+- a background command (`backgroundTaskId`), an async agent (`agentId`) or a monitor (`taskId`), from the tool's result in `PostToolUse`;
+- a scheduled wake-up (`scheduledFor`).
+
+Each ends when its `<task-notification>` arrives with a final status (`completed`, `failed`, `stopped`), when `TaskStop` stops it, or when a monitor expires or a wake-up fires. The transcript has what the hooks miss, so when a turn ends, and at launch and every three minutes for sessions that look idle, the board checks the end of the session's transcript. That catches work started while the board wasn't running (or was an older version), and notifications that never reached it. Anything left counts for six hours at most.
 
 `factory uninstall-hooks` takes them out again.
 
@@ -219,7 +227,7 @@ Every field is optional; only what's sent changes.
 }
 ```
 
-- **`state`**: `working`, `waiting`, `blocked`, `done` or `idle`. Aliases work too: `needs_input`, `review`, `error`, `failing`, `shipped`, `paused` and others.
+- **`state`**: `working`, `waiting`, `background`, `blocked`, `done` or `idle`. Aliases work too: `needs_input`, `review`, `error`, `failing`, `shipped`, `paused` and others.
 - **`task`**: what's under way. For working, the board shows it as the headline.
 - **`note`**: a line for the timeline. For blocked, the board shows it as the headline.
 - **`progress`**: 0–1, or a percentage (`40`, `"40%"`). Without it, progress is counted from `steps`.

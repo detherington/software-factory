@@ -8,7 +8,8 @@ import Foundation
 ///   starts (a linked session's news, a background task's result) keep the task they had.
 /// - PreToolUse for AskUserQuestion or ExitPlanMode, and a permission Notification: needs you.
 /// - PostToolUse: working again, with what it just did; TodoWrite and plan updates become steps.
-/// - Stop: idle, its turn finished. SessionEnd: the session goes.
+/// - Stop: idle, its turn finished; or Background, while work it started (a background command, an
+///   async agent, a monitor, a scheduled wake-up) hasn't reported back. SessionEnd: the session goes.
 extension ProjectStore {
     /// `machine` names the other Mac it came from; nil for this one.
     @discardableResult
@@ -35,6 +36,7 @@ extension ProjectStore {
             func set(_ state: ProjectState) {
                 if s.state != state { s.state = state; s.since = now }
             }
+            if machine == nil, let transcript = payload["transcript_path"] as? String { s.transcript = transcript }
             let tool = payload["tool_name"] as? String ?? ""
             let input = payload["tool_input"] as? [String: Any] ?? [:]
 
@@ -47,6 +49,9 @@ extension ProjectStore {
                 set(.working)
                 s.message = nil
                 let prompt = payload["prompt"] as? String ?? ""
+                // Background work that reported back has ended; so has a wake-up that's now firing.
+                let ended = HookText.endedTasks(in: prompt)
+                s.background?.removeAll { ended.contains($0.id) || ($0.kind == .wakeup && ($0.until ?? .distantFuture) <= now.addingTimeInterval(30)) }
                 if let task = HookText.task(from: prompt) {
                     s.appTurn = false
                     s.activity = nil
@@ -77,6 +82,12 @@ extension ProjectStore {
                 let before = s.steps
                 HookText.applySteps(tool: tool, input: input, to: &s.steps)
                 if s.steps != before { s.stepsUpdated = now }
+                if let job = HookText.backgroundJob(tool: tool, input: input, response: payload["tool_response"], now: now) {
+                    s.background = (s.background ?? []).filter { $0.id != job.id } + [job]
+                }
+                if tool == "TaskStop" || tool == "KillShell", let id = (input["task_id"] ?? input["shell_id"]) as? String {
+                    s.background?.removeAll { $0.id == id }
+                }
 
             case "Notification":
                 let message = payload["message"] as? String ?? ""
@@ -91,11 +102,19 @@ extension ProjectStore {
 
             case "Stop":
                 let elapsed = now.timeIntervalSince(s.since)
+                // The transcript has what the hooks missed: work started while the board was down, or
+                // a notification that never reached it.
+                if machine == nil, let transcript = s.transcript, let scan = TranscriptScan.scan(transcript, now: now) {
+                    s.background = TranscriptScan.merge(s.background ?? [], with: scan, at: now)
+                } else {
+                    s.background = s.pendingJobs(at: now)
+                }
+                let waitingOn = s.jobsSummary(at: now)
                 if s.state == .working, s.appTurn != true {
                     p.log(Event(date: now, symbol: "checkmark.circle.fill", title: s.task ?? "Finished a turn",
-                                detail: "Finished after \(Formats.duration(elapsed))"))
+                                detail: "Finished after \(Formats.duration(elapsed))" + (waitingOn.map { "; waiting on \($0)" } ?? "")))
                 }
-                set(.idle)
+                set(waitingOn == nil ? .idle : .background)
                 s.message = nil
                 // A report of "working" ends with the turn, unless the project says otherwise.
                 if p.reported == .working { p.reported = .idle; p.reportedAt = now; p.lastReport = now }
@@ -154,6 +173,54 @@ nonisolated enum HookText {
         if prompt.contains("Linked sessions now") { return String(localized: "Checking on its linked sessions") }
         if prompt.contains("<task-notification") { return String(localized: "Reading a background task's result") }
         return String(localized: "Picking up an update from the app")
+    }
+
+    /// Work a tool call started to come back to, from its result: a background command's
+    /// `backgroundTaskId`, an async agent's `agentId`, a monitor's `taskId` and timeout, a wake-up's time.
+    static func backgroundJob(tool: String, input: [String: Any], response: Any?, now: Date) -> BackgroundJob? {
+        let result = response as? [String: Any] ?? [:]
+        // Only a result that's plain text is read for its wording: a structured one says it all, and
+        // its output can quote anything (another job's "running in background with ID").
+        let text = response as? String ?? ""
+        func describe(_ fallback: String) -> String {
+            if let description = (input["description"] as? String)?.trimmed { return description }
+            let command = (input["command"] as? String ?? "").split(separator: "\n").first.map(String.init) ?? ""
+            return command.isEmpty ? fallback : (command.count > 60 ? String(command.prefix(59)) + "…" : command)
+        }
+        switch tool {
+        case "Bash":
+            guard input["run_in_background"] as? Bool == true else { return nil }
+            let id = result["backgroundTaskId"] as? String
+                ?? text.firstMatch(of: /background with ID: ([A-Za-z0-9_-]+)/).map { String($0.1) }
+            return id.map { BackgroundJob(id: $0, kind: .command, title: describe(String(localized: "A background command")), started: now) }
+        case "Agent", "Task":
+            guard result["isAsync"] as? Bool == true || text.contains("Async agent launched") else { return nil }
+            let id = result["agentId"] as? String ?? text.firstMatch(of: /agentId: ([A-Za-z0-9_-]+)/).map { String($0.1) }
+            return id.map { BackgroundJob(id: $0, kind: .agent, title: describe(String(localized: "A background agent")), started: now) }
+        case "Monitor":
+            let id = result["taskId"] as? String ?? text.firstMatch(of: /Monitor started \(task ([A-Za-z0-9_-]+)/).map { String($0.1) }
+            let timeout = (result["timeoutMs"] as? Double).map { now.addingTimeInterval($0 / 1000) }
+            return id.map { BackgroundJob(id: $0, kind: .monitor, title: describe(String(localized: "A monitor")), started: now, until: timeout) }
+        case "ScheduleWakeup":
+            guard let at = result["scheduledFor"] as? Double else { return nil }
+            let reason = (input["reason"] as? String)?.trimmed ?? String(localized: "A scheduled wake-up")
+            return BackgroundJob(id: "wakeup-\(Int(at))", kind: .wakeup, title: reason, started: now, until: Date(timeIntervalSince1970: at / 1000))
+        default:
+            return nil
+        }
+    }
+
+    /// Background work a prompt reports as over: each <task-notification> with a final status.
+    static func endedTasks(in text: String) -> Set<String> {
+        var ended: Set<String> = []
+        for block in text.matches(of: /<task-notification>([\s\S]*?)<\/task-notification>/) {
+            let body = block.1
+            guard let id = body.firstMatch(of: /<task-id>([^<]+)<\/task-id>/)?.1,
+                  let status = body.firstMatch(of: /<status>([^<]+)<\/status>/)?.1,
+                  ["completed", "failed", "stopped", "killed", "cancelled", "timeout"].contains(String(status)) else { continue }
+            ended.insert(String(id))
+        }
+        return ended
     }
 
     /// App notes saved as tasks before the board knew to skip them.

@@ -8,6 +8,9 @@ enum ProjectState: String, Codable, CaseIterable, Sendable {
     case blocked
     /// An agent is working on it right now.
     case working
+    /// An agent finished its turn but is waiting on work it started: a background command, an agent,
+    /// a monitor, a scheduled wake-up. It picks up again by itself.
+    case background
     /// A milestone shipped.
     case done
     /// Nothing happening.
@@ -21,6 +24,7 @@ enum ProjectState: String, Codable, CaseIterable, Sendable {
         switch key {
         case "working", "active", "running", "busy", "in_progress", "building", "testing": self = .working
         case "waiting", "needs_input", "needs_you", "input", "review", "permission", "question": self = .waiting
+        case "background", "watching", "monitoring", "listening", "scheduled": self = .background
         case "blocked", "error", "failing", "failed", "broken", "stuck": self = .blocked
         case "done", "shipped", "complete", "completed", "released", "finished": self = .done
         case "idle", "paused", "parked", "stopped", "quiet": self = .idle
@@ -33,6 +37,7 @@ enum ProjectState: String, Codable, CaseIterable, Sendable {
         case .waiting: "Needs you"
         case .blocked: "Blocked"
         case .working: "Working"
+        case .background: "Background"
         case .done: "Shipped"
         case .idle: "Idle"
         }
@@ -43,6 +48,7 @@ enum ProjectState: String, Codable, CaseIterable, Sendable {
         case .waiting: "hand.raised.fill"
         case .blocked: "exclamationmark.triangle.fill"
         case .working: "bolt.fill"
+        case .background: "hourglass"
         case .done: "checkmark"
         case .idle: "moon.fill"
         }
@@ -53,9 +59,17 @@ enum ProjectState: String, Codable, CaseIterable, Sendable {
         case .waiting: .amber
         case .blocked: .ember
         case .working: .violet
+        case .background: .sky
         case .done: .mint
         case .idle: .slate
         }
+    }
+
+    /// A state from a newer version of the app (on another Mac's board) reads as idle, rather than
+    /// make the whole board unreadable.
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = ProjectState(rawValue: raw) ?? .idle
     }
 
     /// Board order: what needs you first.
@@ -64,13 +78,14 @@ enum ProjectState: String, Codable, CaseIterable, Sendable {
         case .waiting: 0
         case .blocked: 1
         case .working: 2
-        case .done: 3
-        case .idle: 4
+        case .background: 3
+        case .done: 4
+        case .idle: 5
         }
     }
 
     /// On the board's Now row.
-    var isLive: Bool { self == .waiting || self == .blocked || self == .working }
+    var isLive: Bool { self == .waiting || self == .blocked || self == .working || self == .background }
 }
 
 /// What a project is, for its symbol.
@@ -131,6 +146,33 @@ extension Step {
     }
 }
 
+/// Work a session started to come back to: a background command, an async agent, a monitor, a
+/// scheduled wake-up. Its notification (or TaskStop) ends it, by `id`.
+struct BackgroundJob: Codable, Hashable, Sendable {
+    enum Kind: String, Codable, Sendable { case command, agent, monitor, wakeup }
+
+    var id: String
+    var kind: Kind
+    var title: String
+    var started: Date
+    /// When a monitor expires or a wake-up fires.
+    var until: Date?
+
+    /// Jobs without an end of their own stop counting after this, in case their notification was missed.
+    static let timeout: TimeInterval = 6 * 60 * 60
+
+    func isPending(at now: Date) -> Bool {
+        if let until { return now < until.addingTimeInterval(90) }
+        return now.timeIntervalSince(started) < Self.timeout
+    }
+
+    /// "Archive and upload build 5", "Wakes at 5:08 PM".
+    var label: String {
+        if kind == .wakeup, let until { return String(localized: "Wakes at \(until.formatted(date: .omitted, time: .shortened))") }
+        return title
+    }
+}
+
 /// A coding-agent session working in a project (or one of its worktrees).
 struct Session: Codable, Identifiable, Hashable, Sendable {
     var id: String
@@ -148,6 +190,10 @@ struct Session: Codable, Identifiable, Hashable, Sendable {
     /// Whether the app, not the user, started its current turn: a linked session's news, a
     /// background task's result. Such turns keep the task and aren't logged.
     var appTurn: Bool?
+    /// Work it started to come back to.
+    var background: [BackgroundJob]?
+    /// Its transcript, on this Mac.
+    var transcript: String?
     var steps: [Step]
     /// When its task list last changed.
     var stepsUpdated: Date?
@@ -155,6 +201,19 @@ struct Session: Codable, Identifiable, Hashable, Sendable {
     var updated: Date
     /// When its current state began.
     var since: Date
+}
+
+extension Session {
+    func pendingJobs(at now: Date) -> [BackgroundJob] {
+        (background ?? []).filter { $0.isPending(at: now) }
+    }
+
+    /// "Archive and upload build 5", "Archive and upload build 5 and 2 more".
+    func jobsSummary(at now: Date) -> String? {
+        let jobs = pendingJobs(at: now)
+        guard let first = jobs.first else { return nil }
+        return jobs.count == 1 ? first.label : String(localized: "\(first.label) and \(jobs.count - 1) more")
+    }
 }
 
 /// One line in a project's timeline.
@@ -277,6 +336,7 @@ extension Project {
                 switch session.state {
                 case .working: now.timeIntervalSince(session.updated) < Self.workingTimeout
                 case .waiting: now.timeIntervalSince(session.updated) < Self.waitingTimeout
+                case .background: session.pendingJobs(at: now).isEmpty == false
                 default: false
                 }
             }
@@ -290,6 +350,7 @@ extension Project {
         if live.contains(where: { $0.state == .waiting }) { return .waiting }
         if reported == .blocked { return .blocked }
         if live.contains(where: { $0.state == .working }) { return .working }
+        if live.contains(where: { $0.state == .background }) { return .background }
         if reported == .working, now.timeIntervalSince(max(reportedAt, lastActivity)) > Self.reportedWorkingTimeout {
             return .idle
         }

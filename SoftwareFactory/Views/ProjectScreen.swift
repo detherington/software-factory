@@ -165,7 +165,12 @@ private struct NowPanel: View {
                         .foregroundStyle(Switchyard.ink)
                         .textSelection(.enabled)
                 }
-                if let activity = lead?.activity, lead?.state == .working {
+                if let lead, lead.state == .background, let jobs = lead.jobsSummary(at: now) {
+                    Label(String(localized: "Waiting on \(jobs)"), systemImage: "hourglass")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Switchyard.ink.opacity(0.8))
+                        .padding(.top, 2)
+                } else if let activity = lead?.activity, lead?.state == .working {
                     Label(activity, systemImage: "waveform")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(Switchyard.ink.opacity(0.8))
@@ -202,6 +207,7 @@ private struct NowPanel: View {
         switch state {
         case .waiting: String(localized: "Waiting for you for")
         case .blocked: String(localized: "Blocked for")
+        case .background: String(localized: "In the background for")
         default: String(localized: "Working for")
         }
     }
@@ -295,6 +301,11 @@ private struct SessionsCard: View {
                 }
                 if let message = session.message, state == .waiting {
                     Text(message).font(.system(size: 13, weight: .semibold)).foregroundStyle(Swatch.amber.color)
+                } else if state == .background, let jobs = session.jobsSummary(at: now) {
+                    Label(String(localized: "Waiting on \(jobs)"), systemImage: "hourglass")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Swatch.sky.color)
+                        .lineLimit(1)
                 } else if let activity = session.activity, state == .working {
                     Text(activity).font(.system(size: 13)).foregroundStyle(Switchyard.textSecondary).lineLimit(1)
                 }

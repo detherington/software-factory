@@ -50,6 +50,7 @@ struct BoardContent: View {
     private var title: String {
         if store.count(.waiting) > 0 { return String(localized: "Your move") }
         if store.count(.working) > 0 { return String(localized: "Hard at work") }
+        if store.count(.background) > 0 { return String(localized: "Ticking over") }
         if store.count(.blocked) > 0 { return String(localized: "Stuck") }
         return String(localized: "All quiet")
     }
@@ -63,6 +64,7 @@ private struct StatsRow: View {
         HStack(alignment: .top, spacing: 40) {
             stat(store.count(.waiting), "Needs you", .amber)
             stat(store.count(.working), "Working", .violet)
+            stat(store.count(.background), "Background", .sky)
             stat(store.count(.blocked), "Blocked", .ember)
             stat(store.activeToday, "Active today", nil)
             stat(store.board.count, "Projects", nil)
@@ -152,7 +154,9 @@ private struct ThenBar: View {
         let lead = project.liveSessions(at: now).first
         let next = project.displaySteps(at: now).first { $0.status != .done }
         let (label, text, symbol): (String, String, String) =
-            if let activity = lead?.activity, lead?.state == .working {
+            if let lead, lead.state == .background, let jobs = lead.jobsSummary(at: now) {
+                (String(localized: "Waiting on"), jobs, "hourglass")
+            } else if let activity = lead?.activity, lead?.state == .working {
                 (String(localized: "Just now"), activity, "waveform")
             } else if let next {
                 (next.status == .active ? String(localized: "Under way") : String(localized: "Next"), next.title, "arrow.right")

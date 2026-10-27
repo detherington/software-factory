@@ -11,6 +11,8 @@ struct MenuBarLabel: View {
             Label("\(waiting)", systemImage: "hand.raised.fill").labelStyle(.titleAndIcon)
         } else if working > 0 {
             Label("\(working)", systemImage: "bolt.fill").labelStyle(.titleAndIcon)
+        } else if store.count(.background) > 0 {
+            Label("\(store.count(.background))", systemImage: "hourglass").labelStyle(.titleAndIcon)
         } else {
             Image(systemName: "square.grid.2x2")
         }
@@ -112,6 +114,8 @@ struct MenuBarContent: View {
         if waiting > 0 { return waiting == 1 ? String(localized: "1 needs you") : String(localized: "\(waiting) need you") }
         let working = store.count(.working)
         if working > 0 { return String(localized: "\(working) at work") }
+        let background = store.count(.background)
+        if background > 0 { return String(localized: "\(background) in the background") }
         return String(localized: "All quiet")
     }
 
