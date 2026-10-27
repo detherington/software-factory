@@ -46,6 +46,7 @@ private struct Sidebar: View {
         }
         .safeAreaInset(edge: .bottom) {
             VStack(alignment: .leading, spacing: 6) {
+                UpdateLine()
                 ServerStatusLine()
                 SyncStatusLine()
             }
@@ -102,6 +103,30 @@ struct ServerStatusLine: View {
         .font(.system(size: 11, weight: .medium))
         .foregroundStyle(Switchyard.textTertiary)
         .help("Projects report their status to this address.")
+    }
+}
+
+/// "Update available", when GitHub has something newer: opens Settings, where it installs.
+struct UpdateLine: View {
+    @Environment(Updater.self) private var updater
+
+    var body: some View {
+        switch updater.status {
+        case .available(let changes):
+            SettingsLink {
+                Label(changes.count == 1 ? String(localized: "Update available") : String(localized: "Update available: \(changes.count) changes"),
+                      systemImage: "arrow.down.circle.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Switchyard.accent)
+            }
+            .buttonStyle(.plain)
+        case .updating:
+            Label("Updating…", systemImage: "arrow.down.circle")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Switchyard.textSecondary)
+        default:
+            EmptyView()
+        }
     }
 }
 

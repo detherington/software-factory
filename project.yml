@@ -38,6 +38,17 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         GENERATE_INFOPLIST_FILE: NO
+        # The commit stamp below runs git in the source folder.
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+    postBuildScripts:
+      # Settings › Updates compares this with GitHub. Script phases run before code signing.
+      - name: Stamp the commit
+        basedOnDependencyAnalysis: false
+        script: |
+          plist="$TARGET_BUILD_DIR/$INFOPLIST_PATH"
+          commit=$(git -C "$SRCROOT" rev-parse HEAD 2>/dev/null || echo unknown)
+          /usr/libexec/PlistBuddy -c "Delete :FactoryCommit" "$plist" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :FactoryCommit string $commit" "$plist"
     info:
       path: SoftwareFactory/Resources/Info.plist
       properties:
@@ -48,6 +59,8 @@ targets:
         LSApplicationCategoryType: public.app-category.developer-tools
         LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
         NSHumanReadableCopyright: ""
+        # The clone this copy was built from, which Settings › Updates pulls and builds.
+        FactorySourceFolder: $(SRCROOT)
   factory:
     type: tool
     platform: macOS

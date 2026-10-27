@@ -36,6 +36,7 @@
 		DB43FC608A261A0D152A0AA3 /* SoftwareFactoryApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E592DD4274532C9C48A772D6 /* SoftwareFactoryApp.swift */; };
 		E35139D4DA0FAE569E6CF169 /* ProjectScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4F8FB5A083F5B981533DEE7 /* ProjectScreen.swift */; };
 		EF12394E9693EB28DCDECEBE /* Report.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAEE6799FC5F4B9F63B79D08 /* Report.swift */; };
+		F7D95F73C224E6480C383666 /* Updater.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33DB23C4B4FA4805D6ADB56C /* Updater.swift */; };
 		FA87ABF0D4451D8A32D3AF7D /* MenuBarPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80B2D8F210A74B022475BCC7 /* MenuBarPanel.swift */; };
 		FCA22CA98817A65905AC4C7A /* ClaudeSetup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DE41ABF704054893FFCD764 /* ClaudeSetup.swift */; };
 /* End PBXBuildFile section */
@@ -71,6 +72,7 @@
 		1DE41ABF704054893FFCD764 /* ClaudeSetup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeSetup.swift; sourceTree = "<group>"; };
 		23AA7671D5A8D6B9C0D9E3B8 /* ServerController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerController.swift; sourceTree = "<group>"; };
 		3337D5EF310805146783373B /* Snapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Snapshot.swift; sourceTree = "<group>"; };
+		33DB23C4B4FA4805D6ADB56C /* Updater.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Updater.swift; sourceTree = "<group>"; };
 		40CE93F5B9EE1786B5009D1C /* DesktopChats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesktopChats.swift; sourceTree = "<group>"; };
 		4717CD16391BD36BDBFB83C9 /* Timeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Timeline.swift; sourceTree = "<group>"; };
 		47DEA1EB46AA6BF8D7B327FD /* Navigator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Navigator.swift; sourceTree = "<group>"; };
@@ -198,6 +200,7 @@
 				47DEA1EB46AA6BF8D7B327FD /* Navigator.swift */,
 				3337D5EF310805146783373B /* Snapshot.swift */,
 				E592DD4274532C9C48A772D6 /* SoftwareFactoryApp.swift */,
+				33DB23C4B4FA4805D6ADB56C /* Updater.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -234,6 +237,7 @@
 				E972A6EFA47719453E715EE5 /* Sources */,
 				6CB62F135C60F2008407D47C /* Resources */,
 				8958B15B5DF0211AF6C997D9 /* Embed Dependencies */,
+				08C20CD51D2BB9EE3205109E /* Stamp the commit */,
 			);
 			buildRules = (
 			);
@@ -314,6 +318,28 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		08C20CD51D2BB9EE3205109E /* Stamp the commit */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Stamp the commit";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "plist=\"$TARGET_BUILD_DIR/$INFOPLIST_PATH\"\ncommit=$(git -C \"$SRCROOT\" rev-parse HEAD 2>/dev/null || echo unknown)\n/usr/libexec/PlistBuddy -c \"Delete :FactoryCommit\" \"$plist\" 2>/dev/null || true\n/usr/libexec/PlistBuddy -c \"Add :FactoryCommit string $commit\" \"$plist\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		6D8E3C67913239BE7419D966 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -355,6 +381,7 @@
 				32AEB4813059494CFD9F9121 /* Theme.swift in Sources */,
 				2DF2B9F303A2D6B4C6A6936B /* Timeline.swift in Sources */,
 				05B22A1F26CBA0B6F1B0B487 /* TranscriptScan.swift in Sources */,
+				F7D95F73C224E6480C383666 /* Updater.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -389,6 +416,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = SoftwareFactory/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -407,6 +435,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = SoftwareFactory/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (

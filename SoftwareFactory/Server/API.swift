@@ -48,7 +48,12 @@ enum API {
             case ("GET", ""):
                 return .text(help(port: store.port))
             case ("GET", "api"), ("GET", "api/health"):
-                return try encode(Health(port: store.port, projects: store.projects.count))
+                let updates: [String]? = switch Updater.shared.status {
+                case .available(let changes): changes
+                case .upToDate: []
+                default: nil
+                }
+                return try encode(Health(commit: Updater.shared.commit, updates: updates, port: store.port, projects: store.projects.count))
             case ("GET", "api/projects"):
                 let all = request.query["hidden"] != nil ? store.projects.values.sorted { $0.name < $1.name } : store.board
                 return try encode(ProjectList(projects: all.map { ProjectDTO($0, at: store.now, events: 0) }))
@@ -88,6 +93,12 @@ enum API {
                 }
                 return HTTPResponse(status: 200, contentType: "application/octet-stream", body: data)
             #if DEBUG
+            case ("POST", "api/debug/check-update"):
+                Task { await Updater.shared.check() }
+                return .json(Data("{\"ok\":true}".utf8))
+            case ("POST", "api/debug/update"):
+                Updater.shared.update()
+                return .json(Data("{\"ok\":true}".utf8))
             case ("POST", "api/debug/snapshot"):
                 let directory = request.query["dir"] ?? NSTemporaryDirectory()
                 let written = Snapshot.write(to: URL(fileURLWithPath: directory), store: store)
@@ -179,6 +190,9 @@ private struct Health: Encodable {
     var ok = true
     var app = "Software Factory"
     var version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
+    /// The commit it was built from, and what's new on GitHub (nil until checked).
+    var commit: String?
+    var updates: [String]?
     var port: UInt16
     var projects: Int
 }

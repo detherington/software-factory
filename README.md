@@ -30,6 +30,14 @@ It builds a Release copy, installs it in `~/Applications/Software Factory.app` a
 - **Claude Code hooks.** In Settings › Claude Code, click Install, or run `factory install-hooks`. Every Claude Code session then reports when it's working, waiting on you or finished, with no changes to any project.
 - **Open at login.** Turn it on in Settings › General.
 
+## Updating
+
+Settings › Updates shows the version (with the commit it was built from) and whether GitHub has anything newer. **Update and Restart** installs it. The sidebar shows "Update available" when there is.
+
+- **How it works:** each build records the clone it was built from and its commit. The app runs `git fetch` in that clone at launch and every six hours, and lists the new commits. To update, it runs what you'd type in that clone: `git pull --ff-only`, then `scripts/install.sh`, which builds the new version, replaces the app in `~/Applications`, and reopens it.
+- **What it needs:** a clone of this repository, installed with `scripts/install.sh`, plus Xcode and XcodeGen on that Mac.
+- **Logs and status:** if an update stops (a local change in the way, a failed build), the app carries on and says so, with the log at `~/Library/Logs/Software Factory/update.log`. `GET /api/health` reports the build's `commit` and the `updates` waiting.
+
 ## Design: Switchyard
 
 Switchyard is Rounds' Signal and Sojourny's Wayfinding, applied to a board of projects. The tokens are in [SoftwareFactory/Design/Theme.swift](SoftwareFactory/Design/Theme.swift) and the components in [SoftwareFactory/Design/Components.swift](SoftwareFactory/Design/Components.swift), adapted from Emanata's.

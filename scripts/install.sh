@@ -12,8 +12,10 @@ xcodebuild -project SoftwareFactory.xcodeproj -scheme SoftwareFactory -configura
 built="build/DerivedData/Build/Products/Release/Software Factory.app"
 app="$HOME/Applications/Software Factory.app"
 
-if pkill -TERM -x "Software Factory"; then
-  for _ in {1..20}; do pgrep -x "Software Factory" >/dev/null || break; sleep 0.25; done
+# -a: when the app's own updater runs this, the app is one of this script's ancestors, which
+# pkill and pgrep otherwise skip.
+if pkill -TERM -a -x "Software Factory"; then
+  for _ in {1..20}; do pgrep -a -x "Software Factory" >/dev/null || break; sleep 0.25; done
 fi
 
 mkdir -p "$HOME/Applications" "$HOME/.local/bin"

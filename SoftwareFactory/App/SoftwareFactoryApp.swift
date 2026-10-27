@@ -35,6 +35,7 @@ extension View {
     func factoryEnvironment() -> some View {
         environment(ProjectStore.shared)
             .environment(Navigator.shared)
+            .environment(Updater.shared)
             .tint(Switchyard.accent)
             .preferredColorScheme(.dark)
     }
@@ -61,6 +62,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         store.startClock()
         store.startSync()
         ServerController.shared.start(store: store)
+        Updater.shared.startChecking()
         // Look for projects now and every few minutes: new folders, commits, READMEs.
         discoveryLoop = Task {
             while !Task.isCancelled {

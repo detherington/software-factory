@@ -55,6 +55,7 @@ struct SettingsView: View {
                 Text("The hooks go in ~/.claude/settings.json and report every session's state: working, waiting for you, finished. The CLAUDE.md section asks Claude to report milestones, steps and blockers too. A backup of your settings is kept beside them.")
             }
 
+            UpdatesSection()
             SyncSection()
             OtherMacsSection(message: $message)
 
@@ -128,6 +129,76 @@ struct SettingsView: View {
         }
         hooksInstalled = ClaudeSetup.isInstalled()
         toolLinked = CommandLineTool.isLinked
+    }
+}
+
+/// What's new on GitHub, and updating to it.
+private struct UpdatesSection: View {
+    @Environment(Updater.self) private var updater
+
+    var body: some View {
+        Section {
+            LabeledContent("Version") {
+                let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
+                Text(verbatim: "\(version) (\(updater.shortCommit ?? "unknown"))")
+                    .font(.code(11))
+                    .textSelection(.enabled)
+            }
+            if let from = updater.updatedFrom {
+                LabeledContent("Updated") {
+                    Text("From \(String(from.prefix(7))), when it last started").foregroundStyle(Switchyard.textSecondary)
+                }
+            }
+            switch updater.status {
+            case .unknown, .checking:
+                LabeledContent("GitHub") {
+                    HStack(spacing: 6) {
+                        ProgressView().controlSize(.small)
+                        Text("Checking…").foregroundStyle(Switchyard.textSecondary)
+                    }
+                }
+            case .upToDate:
+                LabeledContent("GitHub") {
+                    HStack {
+                        Text("Up to date").foregroundStyle(Swatch.mint.color)
+                        Button("Check Now") { Task { await updater.check() } }
+                    }
+                }
+            case .available(let changes):
+                LabeledContent("GitHub") {
+                    Text(changes.count == 1 ? String(localized: "1 new change") : String(localized: "\(changes.count) new changes"))
+                        .foregroundStyle(Switchyard.accent)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(Array(changes.prefix(6).enumerated()), id: \.offset) { _, change in
+                        Text("• \(change)").font(.callout).foregroundStyle(Switchyard.textSecondary).lineLimit(2)
+                    }
+                    if changes.count > 6 {
+                        Text("and \(changes.count - 6) more").font(.callout).foregroundStyle(Switchyard.textTertiary)
+                    }
+                }
+                Button("Update and Restart") { updater.update() }
+                    .buttonStyle(.borderedProminent)
+            case .updating:
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Building the new version. Software Factory restarts when it's done, in a minute or two.")
+                        .foregroundStyle(Switchyard.textSecondary)
+                }
+            case .failed(let message):
+                Text(message).foregroundStyle(Swatch.ember.color)
+                HStack {
+                    Button("Show Log") { NSWorkspace.shared.open(Updater.logURL) }
+                    Button("Check Again") { Task { await updater.check() } }
+                }
+            case .unavailable(let message):
+                Text(message).foregroundStyle(Switchyard.textSecondary)
+            }
+        } header: {
+            Text("Updates")
+        } footer: {
+            Text("Updates come from GitHub. The app pulls the clone it was built from\(updater.source.map { " (\($0.path))" } ?? "") and runs scripts/install.sh, which needs Xcode and XcodeGen. It checks at launch and every six hours.")
+        }
     }
 }
 
