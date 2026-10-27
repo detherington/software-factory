@@ -15,6 +15,7 @@ Report (for the project in the current folder, or --project):
   factory note "Moved sync to CKSyncEngine"            a line in the timeline
   factory progress 40 [--milestone "TestFlight 0.3"]
   factory steps --done "Design" --active "Build" --todo "Test" "Ship"
+  factory advance                                      the step under way is done; start the next
   factory report [--state S] [--task T] [--note N] [--milestone M] [--progress P]
                  [--version V] [--summary S] [--name N] [--code C] [--kind K] [--branch B]
                  [--link name=url] [--clear field]
@@ -250,6 +251,8 @@ func run(_ args: Arguments) async throws {
         var withLoose = args
         withLoose.steps += args.words.map { ["title": $0, "status": "todo"] }
         try await report(withLoose, [:], url: url)
+    case "advance", "next":
+        try await report(args, ["advance": true], url: url)
     case "report", "status":
         try await report(args, [:], url: url)
     case "list", "ls":

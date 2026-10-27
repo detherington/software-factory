@@ -169,10 +169,14 @@ nonisolated enum ClaudeSetup {
         \(intro) Hooks already report when a session is working, waiting on me or finished. Use the `factory` command \
         to add what hooks can't know, from the project's folder:
 
-        - When you start a piece of work with several steps: `factory steps --active "First step" --todo "Second" "Third"`
-          (or `factory report --milestone "TestFlight 0.3" --progress 40`).
+        - Your own to-do list (TodoWrite, or the task list in Claude Desktop) already reaches the board through the hooks, \
+        so keep it up to date as usual and don't repeat it with `factory`.
+        - Only when you're not keeping a to-do list, for work with several steps: \
+        `factory steps --active "First step" --todo "Second" "Third"`, then `factory advance` each time a step is finished.
+        - For a milestone: `factory report --milestone "TestFlight 0.3" --progress 40`.
         - When something is broken and you can't fix it yet: `factory blocked "Tests fail on iOS 27: missing key"`.
-        - When something ships (a release, a TestFlight build, a merged PR): `factory done "Shipped 0.3 to TestFlight"`.
+        - When something ships (a release, a TestFlight build, a merged PR): `factory done "Shipped 0.3 to TestFlight"`. \
+        That ticks off any steps left.
         - For anything worth a line in the project's timeline: `factory note "Moved sync to CKSyncEngine"`.
 
         \(ending)

@@ -25,6 +25,8 @@ struct Report: Decodable, Sendable {
     /// 0–1, or a percentage (42, "42%").
     var progress: FlexibleNumber?
     var steps: [StepInput]?
+    /// Finishes the step under way and starts the next, without sending the list again.
+    var advance: Bool?
     var version: String?
     var branch: String?
     var repo: String?

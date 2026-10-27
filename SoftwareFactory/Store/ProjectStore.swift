@@ -293,6 +293,13 @@ final class ProjectStore {
                     }
                 }
                 p.steps = steps
+                p.stepsUpdated = now
+            }
+            if report.advance == true {
+                if let step = Step.advance(&p.steps) {
+                    p.log(Event(date: now, state: .done, symbol: "checkmark", title: step.title, detail: "Step done"))
+                }
+                p.stepsUpdated = now
             }
             let oldTask = p.task
             if let task = report.task?.trimmed { p.task = task }

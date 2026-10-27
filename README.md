@@ -158,6 +158,7 @@ factory idle
 factory note "Moved sync to CKSyncEngine"
 factory progress 40 --milestone "TestFlight 0.3"
 factory steps --done "Design" --active "Build" --todo "Test" "Ship"
+factory advance                     # the step under way is done; start the next
 factory report --state working --task "…" --version "0.3 (14)" --link pr=https://github.com/…
 factory list
 factory show [project]
@@ -222,7 +223,9 @@ Every field is optional; only what's sent changes.
 - **`task`**: what's under way. For working, the board shows it as the headline.
 - **`note`**: a line for the timeline. For blocked, the board shows it as the headline.
 - **`progress`**: 0–1, or a percentage (`40`, `"40%"`). Without it, progress is counted from `steps`.
+- **`advance`**: `true` finishes the step under way, or the first still to do, and starts the next, without sending the list again.
 - **`steps`**: replace the checklist. Each step is a string, or an object with `title` (or `content`) and `status`: `todo`, `active` or `done`, or a todo list's `pending`, `in_progress` or `completed`. `"done": true` also works. Steps that turn done are logged.
+- **Which checklist shows:** whichever list changed last. That's either the checklist reports set, or a session's own to-do list, which the hooks read from TodoWrite and Claude Desktop's task list. Reporting `done` ticks off a checklist set before it, and Claude Desktop's wrap-up ticks off the step under way.
 - **`kind`**: `ios`, `mac`, `apple`, `game`, `web`, `site`, `cloud`, `tool`, `library` or `other`. It picks the project's symbol, and `symbol` sets any SF Symbol instead.
 - **`clear`**: empties fields: `task`, `note`, `milestone`, `progress`, `steps`, `summary` or `version`.
 

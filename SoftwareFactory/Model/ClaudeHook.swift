@@ -74,7 +74,9 @@ extension ProjectStore {
                 set(.working)
                 s.message = nil
                 s.activity = HookText.activity(tool: tool, input: input)
+                let before = s.steps
                 HookText.applySteps(tool: tool, input: input, to: &s.steps)
+                if s.steps != before { s.stepsUpdated = now }
 
             case "Notification":
                 let message = payload["message"] as? String ?? ""
@@ -222,10 +224,7 @@ nonisolated enum HookText {
             if let items = input["items"] as? [[String: Any]] {
                 steps = items.map { Step(title: $0["content"] as? String ?? "", status: .init(loose: $0["status"] as? String)) }
             }
-            if input["advance"] as? Bool == true, let current = steps.firstIndex(where: { $0.status == .active }) {
-                steps[current].status = .done
-                if let next = steps[current...].firstIndex(where: { $0.status == .todo }) { steps[next].status = .active }
-            }
+            if input["advance"] as? Bool == true { Step.advance(&steps) }
             for number in input["done"] as? [Int] ?? [] where steps.indices.contains(number - 1) {
                 steps[number - 1].status = .done
             }
@@ -233,6 +232,9 @@ nonisolated enum HookText {
                 for i in steps.indices where steps[i].status == .active { steps[i].status = .todo }
                 steps[start - 1].status = .active
             }
+        } else if tool.hasSuffix("wrap_up") {
+            // Claude Desktop's wrap-up ticks off the step under way.
+            for index in steps.indices where steps[index].status == .active { steps[index].status = .done }
         } else if tool == "TaskCreate", let subject = input["subject"] as? String {
             steps.append(Step(title: subject, status: .todo))
         } else if tool == "TaskUpdate", let raw = input["taskId"], let number = Int("\(raw)"), steps.indices.contains(number - 1) {

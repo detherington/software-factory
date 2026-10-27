@@ -117,6 +117,20 @@ struct Step: Codable, Hashable, Sendable {
     var status: Status
 }
 
+extension Step {
+    /// Finishes the step under way (or, with none under way, the first still to do) and starts the
+    /// next. Returns the step it finished.
+    @discardableResult
+    static func advance(_ steps: inout [Step]) -> Step? {
+        guard let current = steps.firstIndex(where: { $0.status == .active }) ?? steps.firstIndex(where: { $0.status == .todo }) else {
+            return nil
+        }
+        steps[current].status = .done
+        if let next = steps[current...].firstIndex(where: { $0.status == .todo }) { steps[next].status = .active }
+        return steps[current]
+    }
+}
+
 /// A coding-agent session working in a project (or one of its worktrees).
 struct Session: Codable, Identifiable, Hashable, Sendable {
     var id: String
@@ -135,6 +149,8 @@ struct Session: Codable, Identifiable, Hashable, Sendable {
     /// background task's result. Such turns keep the task and aren't logged.
     var appTurn: Bool?
     var steps: [Step]
+    /// When its task list last changed.
+    var stepsUpdated: Date?
     var started: Date
     var updated: Date
     /// When its current state began.
@@ -186,6 +202,8 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
     var milestone: String?
     var progress: Double?
     var steps: [Step] = []
+    /// When a report last set or ticked the steps.
+    var stepsUpdated: Date?
     var version: String?
     var branch: String?
     var repo: String?
@@ -226,6 +244,7 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
         milestone = try c.decodeIfPresent(String.self, forKey: .milestone)
         progress = try c.decodeIfPresent(Double.self, forKey: .progress)
         steps = try c.decodeIfPresent([Step].self, forKey: .steps) ?? []
+        stepsUpdated = try c.decodeIfPresent(Date.self, forKey: .stepsUpdated)
         version = try c.decodeIfPresent(String.self, forKey: .version)
         branch = try c.decodeIfPresent(String.self, forKey: .branch)
         repo = try c.decodeIfPresent(String.self, forKey: .repo)
@@ -301,8 +320,19 @@ extension Project {
 
     /// The checklist on show: the project's own milestone steps, or else the lead session's task list.
     func displaySteps(at now: Date) -> [Step] {
-        if !steps.isEmpty { return steps }
-        return leadSession(at: now)?.steps ?? []
+        // The newest list wins: the reported checklist, or a session's own to-do list.
+        let checklistTime = stepsUpdated ?? .distantPast
+        let session = sessions
+            .filter { !$0.steps.isEmpty }
+            .max { ($0.stepsUpdated ?? $0.updated) < ($1.stepsUpdated ?? $1.updated) }
+        if let session, steps.isEmpty || (session.stepsUpdated ?? session.updated) > checklistTime {
+            return session.steps
+        }
+        // Shipping finishes the checklist that was set before it.
+        if reported == .done, checklistTime <= reportedAt {
+            return steps.map { Step(title: $0.title, status: .done) }
+        }
+        return steps
     }
 
     /// Progress from 0 to 1, as reported or counted from the steps.
