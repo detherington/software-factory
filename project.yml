@@ -41,14 +41,16 @@ targets:
         # The commit stamp below runs git in the source folder.
         ENABLE_USER_SCRIPT_SANDBOXING: NO
     postBuildScripts:
-      # Settings › Updates compares this with GitHub. Script phases run before code signing.
+      # Settings › Updates compares this with GitHub. Script phases run before code signing. It's a
+      # file of its own: Info.plist is written by a step this script can race.
       - name: Stamp the commit
         basedOnDependencyAnalysis: false
         script: |
-          plist="$TARGET_BUILD_DIR/$INFOPLIST_PATH"
+          info="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/BuildInfo.plist"
           commit=$(git -C "$SRCROOT" rev-parse HEAD 2>/dev/null || echo unknown)
-          /usr/libexec/PlistBuddy -c "Delete :FactoryCommit" "$plist" 2>/dev/null || true
-          /usr/libexec/PlistBuddy -c "Add :FactoryCommit string $commit" "$plist"
+          mkdir -p "$(dirname "$info")"
+          rm -f "$info"
+          /usr/libexec/PlistBuddy -c "Add :FactoryCommit string $commit" "$info"
     info:
       path: SoftwareFactory/Resources/Info.plist
       properties:

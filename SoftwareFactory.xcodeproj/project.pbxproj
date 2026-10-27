@@ -336,7 +336,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "plist=\"$TARGET_BUILD_DIR/$INFOPLIST_PATH\"\ncommit=$(git -C \"$SRCROOT\" rev-parse HEAD 2>/dev/null || echo unknown)\n/usr/libexec/PlistBuddy -c \"Delete :FactoryCommit\" \"$plist\" 2>/dev/null || true\n/usr/libexec/PlistBuddy -c \"Add :FactoryCommit string $commit\" \"$plist\"\n";
+			shellScript = "info=\"$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/BuildInfo.plist\"\ncommit=$(git -C \"$SRCROOT\" rev-parse HEAD 2>/dev/null || echo unknown)\nmkdir -p \"$(dirname \"$info\")\"\nrm -f \"$info\"\n/usr/libexec/PlistBuddy -c \"Add :FactoryCommit string $commit\" \"$info\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 

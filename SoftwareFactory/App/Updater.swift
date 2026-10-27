@@ -27,8 +27,9 @@ final class Updater {
     /// The commit this copy replaced, when it's the first launch after an update.
     private(set) var updatedFrom: String?
 
-    /// The commit this copy was built from, and the clone it was built in.
-    let commit = Bundle.main.object(forInfoDictionaryKey: "FactoryCommit") as? String
+    /// The commit this copy was built from (stamped into BuildInfo.plist), and the clone it was built in.
+    let commit = Bundle.main.url(forResource: "BuildInfo", withExtension: "plist")
+        .flatMap { NSDictionary(contentsOf: $0)?["FactoryCommit"] as? String }
     let source = (Bundle.main.object(forInfoDictionaryKey: "FactorySourceFolder") as? String).map { URL(fileURLWithPath: $0, isDirectory: true) }
 
     static var logURL: URL {
