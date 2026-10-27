@@ -48,6 +48,8 @@ extension ProjectStore {
             case "UserPromptSubmit":
                 set(.working)
                 s.message = nil
+                s.ask = nil
+                s.askBlocks = nil
                 let prompt = payload["prompt"] as? String ?? ""
                 // Background work that reported back has ended; so has a wake-up that's now firing.
                 let ended = HookText.endedTasks(in: prompt)
@@ -88,6 +90,11 @@ extension ProjectStore {
                 if tool == "TaskStop" || tool == "KillShell", let id = (input["task_id"] ?? input["shell_id"]) as? String {
                     s.background?.removeAll { $0.id == id }
                 }
+                // Claude Desktop's next-step box: the turn is ending, maybe with a question for you.
+                if tool.hasSuffix("wrap_up") {
+                    s.ask = (input["ask"] as? String)?.trimmed
+                    s.askBlocks = input["blocked"] as? Bool
+                }
 
             case "Notification":
                 let message = payload["message"] as? String ?? ""
@@ -110,12 +117,28 @@ extension ProjectStore {
                     s.background = s.pendingJobs(at: now)
                 }
                 let waitingOn = s.jobsSummary(at: now)
-                if s.state == .working, s.appTurn != true {
-                    p.log(Event(date: now, symbol: "checkmark.circle.fill", title: s.task ?? "Finished a turn",
-                                detail: "Finished after \(Formats.duration(elapsed))" + (waitingOn.map { "; waiting on \($0)" } ?? "")))
+                let ending = machine == nil ? s.transcript.flatMap(TranscriptScan.ending(of:)) : nil
+                let finished = s.state == .working
+                if case .apiError(let error) = ending {
+                    // It stopped on an error, not by finishing.
+                    set(.blocked)
+                    s.message = error
+                    p.log(Event(date: now, state: .blocked, symbol: ProjectState.blocked.symbol, title: error, detail: s.task))
+                } else if let ask = s.ask {
+                    // It finished with a question: blocking ones need you; the rest are your call.
+                    let state: ProjectState = s.askBlocks == true ? .waiting : .yourCall
+                    set(state)
+                    s.message = ask
+                    p.log(Event(date: now, state: state, symbol: state.symbol, title: ask,
+                                detail: [s.task, "after \(Formats.duration(elapsed))"].compactMap { $0 }.joined(separator: " · ")))
+                } else {
+                    if finished, s.appTurn != true {
+                        p.log(Event(date: now, symbol: "checkmark.circle.fill", title: s.task ?? "Finished a turn",
+                                    detail: "Finished after \(Formats.duration(elapsed))" + (waitingOn.map { "; waiting on \($0)" } ?? "")))
+                    }
+                    set(waitingOn == nil ? .idle : .background)
+                    s.message = nil
                 }
-                set(waitingOn == nil ? .idle : .background)
-                s.message = nil
                 // A report of "working" ends with the turn, unless the project says otherwise.
                 if p.reported == .working { p.reported = .idle; p.reportedAt = now; p.lastReport = now }
 

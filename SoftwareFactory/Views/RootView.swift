@@ -29,7 +29,7 @@ private struct Sidebar: View {
     var body: some View {
         List(selection: $selection) {
             Label("Board", systemImage: "square.grid.2x2.fill")
-                .badge(store.count(.waiting))
+                .badge(store.count(.waiting) + store.count(.yourCall))
                 .tag(SidebarItem.board)
             Label("Activity", systemImage: "waveform.path.ecg")
                 .tag(SidebarItem.activity)

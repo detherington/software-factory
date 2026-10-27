@@ -48,7 +48,8 @@ Switchyard is Rounds' Signal and Sojourny's Wayfinding, applied to a board of pr
   | State | Swatch | Glyph |
   |---|---|---|
   | Needs you | Amber `#FFC43D` | `hand.raised.fill` |
-  | Blocked | Ember `#FF5533` | `exclamationmark.triangle.fill` |
+  | Blocked, or stopped on an error | Ember `#FF5533` | `exclamationmark.triangle.fill` |
+  | Your call: finished with a question for you | Tangerine `#FF8C1A` | `questionmark.bubble.fill` |
   | Working (also the tint) | Violet `#9466FF` | `bolt.fill` |
   | Background: waiting on work it started | Sky `#45AEFF` | `hourglass` |
   | Shipped | Mint `#3EDB98` | `checkmark` |
@@ -73,11 +74,12 @@ Switchyard is Rounds' Signal and Sojourny's Wayfinding, applied to a board of pr
 
 A project's state comes from its sessions (via hooks) and from reports (via the API or `factory`):
 
-1. If any session is waiting on you (a permission prompt, a question, a plan to review), it **needs you**.
-2. Otherwise, if a report says it's **blocked**, it's blocked until a later report says otherwise.
-3. Otherwise, if any session is **working**, it's working.
-4. Otherwise, if a session finished its turn but is waiting on work it started, it's in the **background**.
-5. Otherwise it's whatever the last report said.
+1. If any session is waiting on you (a permission prompt, a question, a plan to review, or a next-step box that says it's blocked on your answer), it **needs you**.
+2. Otherwise, if a report says it's **blocked**, or a session stopped on an error, it's blocked: until a later report, or the session's next turn.
+3. Otherwise, if a session finished its turn with a question for you in Claude Desktop's next-step box, it's **your call**.
+4. Otherwise, if any session is **working**, it's working.
+5. Otherwise, if a session finished its turn but is waiting on work it started, it's in the **background**.
+6. Otherwise it's whatever the last report said.
 
 Sessions that go quiet stop counting: a working session after 20 minutes, a waiting one after 24 hours. A report of "working" lapses to idle after 45 quiet minutes or when the session's turn ends.
 
@@ -100,8 +102,10 @@ It prints nothing and always exits 0, so a closed app never gets in a session's 
 | `PreToolUse` (AskUserQuestion, ExitPlanMode) | Needs you: the question, or "A plan is ready for your review" |
 | `PostToolUse` | Working, with what it just did: "Editing Theme.swift", or a Bash command's description. TodoWrite, the desktop app's `update_plan`, and TaskCreate/TaskUpdate become the session's steps |
 | `Notification` (permission prompt) | Needs you, with Claude's message |
-| `Stop` | Idle, or Background while work the session started hasn't reported back; logs "Finished after 12 m" |
+| `Stop` | Blocked if the turn ended on an API error; Your call (or Needs you) if Claude Desktop's next-step box asked a question; Background while work the session started hasn't reported back; otherwise Idle. Logs "Finished after 12 m" |
 | `SessionEnd` | Removes the session |
+
+**Questions and errors.** Claude Desktop's next-step box (`wrap_up`) is how a turn ends with a question for you. Its `ask` becomes the card's headline: Your call, or Needs you when the box says it's `blocked` on your answer. A turn can also stop without finishing: on an API error (no connection, out of usage credits) or because you interrupted it. Then Claude Code may not run the Stop hook, which would leave the card saying Working. So when a session on this Mac has been quiet for a minute while marked working, the board reads the last exchange in its transcript. An error turns the card Blocked, with the error in words; an interruption makes it idle.
 
 **Background work.** A session that finishes its turn with work still running is shown as **Background** (sky), with what it's waiting on. That covers:
 - a background command (`backgroundTaskId`), an async agent (`agentId`) or a monitor (`taskId`), from the tool's result in `PostToolUse`;
@@ -235,7 +239,7 @@ Every field is optional; only what's sent changes.
 }
 ```
 
-- **`state`**: `working`, `waiting`, `background`, `blocked`, `done` or `idle`. Aliases work too: `needs_input`, `review`, `error`, `failing`, `shipped`, `paused` and others.
+- **`state`**: `working`, `waiting`, `yourCall`, `background`, `blocked`, `done` or `idle`. Aliases work too: `needs_input`, `review`, `error`, `failing`, `shipped`, `paused` and others.
 - **`task`**: what's under way. For working, the board shows it as the headline.
 - **`note`**: a line for the timeline. For blocked, the board shows it as the headline.
 - **`progress`**: 0–1, or a percentage (`40`, `"40%"`). Without it, progress is counted from `steps`.

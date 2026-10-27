@@ -15,7 +15,7 @@ struct Report: Decodable, Sendable {
     var kind: String?
     var symbol: String?
 
-    /// working, waiting, background, blocked, done or idle.
+    /// working, waiting, yourCall, background, blocked, done or idle.
     var state: String?
     /// What's under way, in a line.
     var task: String?

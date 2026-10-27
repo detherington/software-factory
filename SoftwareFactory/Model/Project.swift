@@ -4,8 +4,11 @@ import Foundation
 enum ProjectState: String, Codable, CaseIterable, Sendable {
     /// An agent stopped for you: a permission prompt, a question, a plan to approve.
     case waiting
-    /// Something is broken: a failing build, failing tests, a missing key.
+    /// Something is broken: a failing build, failing tests, a missing key; or a session stopped on an
+    /// error (a usage limit, no connection).
     case blocked
+    /// A session finished its turn with a question for you: Claude Desktop's next-step box asked one.
+    case yourCall
     /// An agent is working on it right now.
     case working
     /// An agent finished its turn but is waiting on work it started: a background command, an agent,
@@ -25,6 +28,7 @@ enum ProjectState: String, Codable, CaseIterable, Sendable {
         case "working", "active", "running", "busy", "in_progress", "building", "testing": self = .working
         case "waiting", "needs_input", "needs_you", "input", "review", "permission", "question": self = .waiting
         case "background", "watching", "monitoring", "listening", "scheduled": self = .background
+        case "yourcall", "your_call", "your_turn", "decision", "decide": self = .yourCall
         case "blocked", "error", "failing", "failed", "broken", "stuck": self = .blocked
         case "done", "shipped", "complete", "completed", "released", "finished": self = .done
         case "idle", "paused", "parked", "stopped", "quiet": self = .idle
@@ -36,6 +40,7 @@ enum ProjectState: String, Codable, CaseIterable, Sendable {
         switch self {
         case .waiting: "Needs you"
         case .blocked: "Blocked"
+        case .yourCall: "Your call"
         case .working: "Working"
         case .background: "Background"
         case .done: "Shipped"
@@ -47,6 +52,7 @@ enum ProjectState: String, Codable, CaseIterable, Sendable {
         switch self {
         case .waiting: "hand.raised.fill"
         case .blocked: "exclamationmark.triangle.fill"
+        case .yourCall: "questionmark.bubble.fill"
         case .working: "bolt.fill"
         case .background: "hourglass"
         case .done: "checkmark"
@@ -58,6 +64,7 @@ enum ProjectState: String, Codable, CaseIterable, Sendable {
         switch self {
         case .waiting: .amber
         case .blocked: .ember
+        case .yourCall: .tangerine
         case .working: .violet
         case .background: .sky
         case .done: .mint
@@ -77,15 +84,19 @@ enum ProjectState: String, Codable, CaseIterable, Sendable {
         switch self {
         case .waiting: 0
         case .blocked: 1
-        case .working: 2
-        case .background: 3
-        case .done: 4
-        case .idle: 5
+        case .yourCall: 2
+        case .working: 3
+        case .background: 4
+        case .done: 5
+        case .idle: 6
         }
     }
 
     /// On the board's Now row.
-    var isLive: Bool { self == .waiting || self == .blocked || self == .working || self == .background }
+    var isLive: Bool { self != .done && self != .idle }
+
+    /// Waiting on you, one way or another: the Dock and menu bar count these.
+    var needsYou: Bool { self == .waiting || self == .yourCall }
 }
 
 /// What a project is, for its symbol.
@@ -194,6 +205,10 @@ struct Session: Codable, Identifiable, Hashable, Sendable {
     var background: [BackgroundJob]?
     /// Its transcript, on this Mac.
     var transcript: String?
+    /// The question its turn is ending with, from Claude Desktop's next-step box, and whether the
+    /// box said it can't go on without an answer.
+    var ask: String?
+    var askBlocks: Bool?
     var steps: [Step]
     /// When its task list last changed.
     var stepsUpdated: Date?
@@ -335,7 +350,7 @@ extension Project {
             .filter { session in
                 switch session.state {
                 case .working: now.timeIntervalSince(session.updated) < Self.workingTimeout
-                case .waiting: now.timeIntervalSince(session.updated) < Self.waitingTimeout
+                case .waiting, .yourCall, .blocked: now.timeIntervalSince(session.updated) < Self.waitingTimeout
                 case .background: session.pendingJobs(at: now).isEmpty == false
                 default: false
                 }
@@ -348,7 +363,8 @@ extension Project {
     func state(at now: Date) -> ProjectState {
         let live = liveSessions(at: now)
         if live.contains(where: { $0.state == .waiting }) { return .waiting }
-        if reported == .blocked { return .blocked }
+        if reported == .blocked || live.contains(where: { $0.state == .blocked }) { return .blocked }
+        if live.contains(where: { $0.state == .yourCall }) { return .yourCall }
         if live.contains(where: { $0.state == .working }) { return .working }
         if live.contains(where: { $0.state == .background }) { return .background }
         if reported == .working, now.timeIntervalSince(max(reportedAt, lastActivity)) > Self.reportedWorkingTimeout {
@@ -371,7 +387,7 @@ extension Project {
     /// What's happening, in a line.
     func headline(at now: Date) -> String? {
         if let live = liveSessions(at: now).first {
-            if live.state == .waiting, let message = live.message { return message }
+            if [.waiting, .yourCall, .blocked].contains(live.state), let message = live.message { return message }
             if let task = live.task { return task }
         }
         // What broke, or what shipped, says more than the task before it.

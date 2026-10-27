@@ -208,6 +208,7 @@ private struct NowPanel: View {
         case .waiting: String(localized: "Waiting for you for")
         case .blocked: String(localized: "Blocked for")
         case .background: String(localized: "In the background for")
+        case .yourCall: String(localized: "Your call for")
         default: String(localized: "Working for")
         }
     }
@@ -299,8 +300,8 @@ private struct SessionsCard: View {
                 if chat?.title != nil, let task = session.task, state != .idle {
                     Text(task).font(.system(size: 13)).foregroundStyle(Switchyard.textSecondary).lineLimit(1)
                 }
-                if let message = session.message, state == .waiting {
-                    Text(message).font(.system(size: 13, weight: .semibold)).foregroundStyle(Swatch.amber.color)
+                if let message = session.message, [.waiting, .yourCall, .blocked].contains(state) {
+                    Text(message).font(.system(size: 13, weight: .semibold)).foregroundStyle(state.swatch.color).lineLimit(3)
                 } else if state == .background, let jobs = session.jobsSummary(at: now) {
                     Label(String(localized: "Waiting on \(jobs)"), systemImage: "hourglass")
                         .font(.system(size: 13, weight: .semibold))

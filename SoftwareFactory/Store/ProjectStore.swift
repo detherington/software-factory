@@ -90,6 +90,7 @@ final class ProjectStore {
                 try? await Task.sleep(for: .seconds(20))
                 self?.now = .now
                 self?.refreshBadge()
+                self?.checkStoppedSessions()
             }
         }
     }
@@ -455,6 +456,50 @@ final class ProjectStore {
         }
     }
 
+    @ObservationIgnored private var endingChecks: [String: Date] = [:]
+
+    /// Sessions still shown working whose turn stopped without a Stop hook: on an API error (no
+    /// connection, out of usage credits) or because you interrupted it. The transcript's last exchange
+    /// says so; a quiet minute is the cue to look, once per quiet spell.
+    func checkStoppedSessions() {
+        let now = Date.now
+        let candidates = local.values.flatMap { project in
+            project.sessions
+                .filter { $0.machine == nil && $0.state == .working && now.timeIntervalSince($0.updated) > 60 && endingChecks[$0.id] != $0.updated }
+                .map { (project: project.id, session: $0.id, updated: $0.updated, transcript: $0.transcript) }
+        }
+        guard !candidates.isEmpty else { return }
+        for item in candidates { endingChecks[item.session] = item.updated }
+        Task {
+            let endings = await Task.detached(priority: .utility) {
+                candidates.compactMap { item -> (project: String, session: String, updated: Date, ending: TranscriptScan.Ending)? in
+                    guard let path = item.transcript ?? TranscriptScan.path(forSession: item.session),
+                          let ending = TranscriptScan.ending(of: path) else { return nil }
+                    return (item.project, item.session, item.updated, ending)
+                }
+            }.value
+            for item in endings {
+                // Leave a session that has moved on since.
+                guard let session = local[item.project]?.sessions.first(where: { $0.id == item.session }),
+                      session.updated == item.updated, session.state == .working else { continue }
+                update(item.project) { p in
+                    guard let index = p.sessions.firstIndex(where: { $0.id == item.session }) else { return }
+                    p.sessions[index].since = .now
+                    switch item.ending {
+                    case .apiError(let error):
+                        p.sessions[index].state = .blocked
+                        p.sessions[index].message = error
+                        p.log(Event(date: .now, state: .blocked, symbol: ProjectState.blocked.symbol, title: error, detail: session.task))
+                    case .interrupted:
+                        p.sessions[index].state = .idle
+                        p.sessions[index].message = nil
+                        p.sessions[index].activity = String(localized: "Interrupted")
+                    }
+                }
+            }
+        }
+    }
+
     // MARK: - Discovery
 
     func discover() {
@@ -609,7 +654,7 @@ final class ProjectStore {
 
     /// The Dock icon counts the projects waiting on you.
     func refreshBadge() {
-        let waiting = count(.waiting)
+        let waiting = projects.values.filter { !$0.hidden && $0.state(at: now).needsYou }.count
         let label = waiting > 0 ? "\(waiting)" : nil
         if NSApplication.shared.dockTile.badgeLabel != label { NSApplication.shared.dockTile.badgeLabel = label }
     }

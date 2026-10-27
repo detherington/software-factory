@@ -70,6 +70,50 @@ nonisolated enum TranscriptScan {
         return jobs.values.sorted { $0.started < $1.started }
     }
 
+    /// How a turn ended, when it didn't end by finishing.
+    enum Ending: Sendable, Equatable {
+        /// The API answered with an error: no connection, out of usage credits.
+        case apiError(String)
+        /// You stopped it.
+        case interrupted
+    }
+
+    /// The latest turn's ending, from the transcript's last exchange: an API error in place of
+    /// Claude's answer, or your interruption. Nil when the turn is going on or ended normally.
+    static func ending(of path: String) -> Ending? {
+        guard let handle = FileHandle(forReadingAtPath: path) else { return nil }
+        defer { try? handle.close() }
+        let size = (try? handle.seekToEnd()) ?? 0
+        try? handle.seek(toOffset: size > 262_144 ? size - 262_144 : 0)
+        let tail = String(decoding: (try? handle.readToEnd()) ?? Data(), as: UTF8.self)
+        for line in tail.split(separator: "\n").reversed() {
+            guard let entry = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any] else { continue }
+            let message = entry["message"] as? [String: Any]
+            let items = message?["content"] as? [[String: Any]] ?? []
+            let text = (message?["content"] as? String) ?? items.compactMap { $0["text"] as? String }.joined(separator: " ")
+            switch entry["type"] as? String {
+            case "assistant":
+                guard entry["isApiErrorMessage"] as? Bool == true else { return nil }
+                return .apiError(errorText(text))
+            case "user":
+                return text.hasPrefix("[Request interrupted by user") ? .interrupted : nil
+            default:
+                continue // summaries, snapshots, progress: not part of the exchange
+            }
+        }
+        return nil
+    }
+
+    /// "API Error: Can't reach the API server — check your internet" → "Can't reach the API server —
+    /// check your internet", without links, a line long.
+    private static func errorText(_ text: String) -> String {
+        var line = text.split(separator: "\n").first.map(String.init) ?? text
+        if line.hasPrefix("API Error: ") { line.removeFirst("API Error: ".count) }
+        line = line.replacing(/\s*(at )?https?:\/\/\S+/, with: "").trimmingCharacters(in: CharacterSet(charactersIn: " ,."))
+        if line.isEmpty { return String(localized: "Stopped on an API error") }
+        return line.count > 110 ? String(line.prefix(109)) + "…" : line
+    }
+
     /// A session's transcript: ~/.claude/projects/<folder>/<session id>.jsonl.
     static func path(forSession id: String) -> String? {
         let fm = FileManager.default

@@ -48,7 +48,7 @@ struct BoardContent: View {
     }
 
     private var title: String {
-        if store.count(.waiting) > 0 { return String(localized: "Your move") }
+        if store.count(.waiting) + store.count(.yourCall) > 0 { return String(localized: "Your move") }
         if store.count(.working) > 0 { return String(localized: "Hard at work") }
         if store.count(.background) > 0 { return String(localized: "Ticking over") }
         if store.count(.blocked) > 0 { return String(localized: "Stuck") }
@@ -61,8 +61,10 @@ private struct StatsRow: View {
     @Environment(ProjectStore.self) private var store
 
     var body: some View {
-        HStack(alignment: .top, spacing: 40) {
+        // Wraps onto a second row in a narrow window.
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 132), spacing: 28, alignment: .leading)], alignment: .leading, spacing: 12) {
             stat(store.count(.waiting), "Needs you", .amber)
+            stat(store.count(.yourCall), "Your call", .tangerine)
             stat(store.count(.working), "Working", .violet)
             stat(store.count(.background), "Background", .sky)
             stat(store.count(.blocked), "Blocked", .ember)

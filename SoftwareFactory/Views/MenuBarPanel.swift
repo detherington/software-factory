@@ -6,9 +6,13 @@ struct MenuBarLabel: View {
 
     var body: some View {
         let waiting = store.count(.waiting)
+        let yourCall = store.count(.yourCall)
         let working = store.count(.working)
         if waiting > 0 {
-            Label("\(waiting)", systemImage: "hand.raised.fill").labelStyle(.titleAndIcon)
+            // Everything waiting on you, under the most urgent kind's glyph.
+            Label("\(waiting + yourCall)", systemImage: "hand.raised.fill").labelStyle(.titleAndIcon)
+        } else if yourCall > 0 {
+            Label("\(yourCall)", systemImage: "questionmark.bubble.fill").labelStyle(.titleAndIcon)
         } else if working > 0 {
             Label("\(working)", systemImage: "bolt.fill").labelStyle(.titleAndIcon)
         } else if store.count(.background) > 0 {
@@ -112,6 +116,8 @@ struct MenuBarContent: View {
     private var title: String {
         let waiting = store.count(.waiting)
         if waiting > 0 { return waiting == 1 ? String(localized: "1 needs you") : String(localized: "\(waiting) need you") }
+        let yourCall = store.count(.yourCall)
+        if yourCall > 0 { return yourCall == 1 ? String(localized: "1 awaits your call") : String(localized: "\(yourCall) await your call") }
         let working = store.count(.working)
         if working > 0 { return String(localized: "\(working) at work") }
         let background = store.count(.background)
