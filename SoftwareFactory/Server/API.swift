@@ -226,6 +226,9 @@ struct ProjectDTO: Encodable {
     var sessions: [Session]
     var lastActivity: Date
     var lastCommit: Commit?
+    /// What a working session is doing: planning, testing, building, shipping, compacting.
+    var mode: WorkMode?
+    var looseEnds: [LooseEnds]
     var hidden: Bool
     /// The Claude Desktop chat to open for it, on this Mac: its title and claude:// link.
     var chat: Chat?
@@ -262,6 +265,8 @@ struct ProjectDTO: Encodable {
         sessions = p.sessions.sorted { $0.updated > $1.updated }
         lastActivity = p.lastActivity
         lastCommit = p.lastCommit
+        mode = p.mode(at: now)
+        looseEnds = p.openLooseEnds
         hidden = p.hidden
         chat = ProjectStore.shared.bestChat(for: p).flatMap { chat in chat.url.map { Chat(title: chat.title, url: $0.absoluteString) } }
         events = limit > 0 ? Array(p.events.prefix(limit)) : nil

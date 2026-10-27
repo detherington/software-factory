@@ -63,6 +63,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         store.startSync()
         ServerController.shared.start(store: store)
         Updater.shared.startChecking()
+        // A new version may listen to more hook events: bring the hooks this app installed up to date.
+        _ = try? ClaudeSetup.upgradeIfNeeded()
         // Look for projects now and every few minutes: new folders, commits, READMEs.
         discoveryLoop = Task {
             while !Task.isCancelled {

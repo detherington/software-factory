@@ -157,6 +157,43 @@ extension Step {
     }
 }
 
+/// What a working session is doing, beyond "working": shown in the card's chip, in the working color.
+enum WorkMode: String, Codable, Sendable {
+    case planning, testing, building, shipping, compacting
+
+    var label: String {
+        switch self {
+        case .planning: String(localized: "Planning")
+        case .testing: String(localized: "Testing")
+        case .building: String(localized: "Building")
+        case .shipping: String(localized: "Shipping")
+        case .compacting: String(localized: "Compacting")
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .planning: "list.bullet.clipboard.fill"
+        case .testing: "testtube.2"
+        case .building: "hammer.fill"
+        case .shipping: "paperplane.fill"
+        case .compacting: "arrow.down.right.and.arrow.up.left"
+        }
+    }
+}
+
+/// Work in a project's folder that hasn't gone anywhere yet: uncommitted changes, unpushed commits.
+struct LooseEnds: Codable, Hashable, Sendable {
+    /// Files changed or added and not committed.
+    var changes: Int
+    /// Commits not pushed to the branch's upstream.
+    var unpushed: Int
+    /// The other Mac it's on; nil for this one.
+    var machine: String?
+
+    var isEmpty: Bool { changes == 0 && unpushed == 0 }
+}
+
 /// Work a session started to come back to: a background command, an async agent, a monitor, a
 /// scheduled wake-up. Its notification (or TaskStop) ends it, by `id`.
 struct BackgroundJob: Codable, Hashable, Sendable {
@@ -209,6 +246,10 @@ struct Session: Codable, Identifiable, Hashable, Sendable {
     /// box said it can't go on without an answer.
     var ask: String?
     var askBlocks: Bool?
+    /// What its current tool call is doing (a test run, a build, an upload, a compaction), and
+    /// whether it's in plan mode.
+    var action: WorkMode?
+    var planMode: Bool?
     var steps: [Step]
     /// When its task list last changed.
     var stepsUpdated: Date?
@@ -219,6 +260,9 @@ struct Session: Codable, Identifiable, Hashable, Sendable {
 }
 
 extension Session {
+    /// The tool call under way says more than plan mode does.
+    var mode: WorkMode? { action ?? (planMode == true ? .planning : nil) }
+
     func pendingJobs(at now: Date) -> [BackgroundJob] {
         (background ?? []).filter { $0.isPending(at: now) }
     }
@@ -285,6 +329,8 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
     var sessions: [Session] = []
     var events: [Event] = []
     var lastCommit: Commit?
+    /// Uncommitted and unpushed work, one entry per Mac that has the folder.
+    var looseEnds: [LooseEnds]?
     var created: Date
     /// The newest sign of life from anywhere: a report, a hook, a transcript, a commit.
     var lastActivity: Date
@@ -326,6 +372,7 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
         sessions = try c.decodeIfPresent([Session].self, forKey: .sessions) ?? []
         events = try c.decodeIfPresent([Event].self, forKey: .events) ?? []
         lastCommit = try c.decodeIfPresent(Commit.self, forKey: .lastCommit)
+        looseEnds = try c.decodeIfPresent([LooseEnds].self, forKey: .looseEnds)
         let created = try c.decodeIfPresent(Date.self, forKey: .created) ?? .now
         self.created = created
         reportedAt = try c.decodeIfPresent(Date.self, forKey: .reportedAt) ?? created
@@ -394,6 +441,15 @@ extension Project {
         if [.blocked, .done].contains(state(at: now)), let note { return note }
         return task ?? note
     }
+
+    /// What its working session is doing, when the card says Working.
+    func mode(at now: Date) -> WorkMode? {
+        guard state(at: now) == .working else { return nil }
+        return liveSessions(at: now).first { $0.state == .working && $0.mode != nil }?.mode
+    }
+
+    /// Loose ends worth showing: the ones that aren't empty.
+    var openLooseEnds: [LooseEnds] { (looseEnds ?? []).filter { !$0.isEmpty } }
 
     /// The checklist on show: the project's own milestone steps, or else the lead session's task list.
     func displaySteps(at now: Date) -> [Step] {

@@ -103,8 +103,8 @@ struct LiveCard: View {
                     TrackedLabel(topLine(live: live), size: 11, color: Switchyard.ink.opacity(0.72))
                         .lineLimit(1)
                     Spacer(minLength: 8)
-                    StatusChip(text: "\(state.label) · \(Formats.ago(project.stateSince(at: now), from: now))",
-                               swatch: state.swatch, symbol: state.symbol, onFlood: true)
+                    StateChip(state: state, mode: project.mode(at: now), since: Formats.ago(project.stateSince(at: now), from: now),
+                              onFlood: true)
                 }
                 Text(project.name)
                     .font(.display(50, weight: .black))
@@ -224,6 +224,11 @@ struct ProjectCard: View {
                     .foregroundStyle(Switchyard.textSecondary)
                     .lineLimit(2, reservesSpace: true)
                     .multilineTextAlignment(.leading)
+                let ends = project.openLooseEnds
+                if !ends.isEmpty {
+                    HStack(spacing: 6) { LooseEndsChips(ends: ends) }
+                        .padding(.top, 2)
+                }
                 if !steps.isEmpty {
                     Strip.steps(steps, color: state == .idle ? Switchyard.textSecondary : state.swatch.color, track: Switchyard.surfaceRaised)
                         .padding(.vertical, 4)

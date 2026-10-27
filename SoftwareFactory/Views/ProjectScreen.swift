@@ -79,8 +79,8 @@ struct ProjectContent: View {
     private func chips(state: ProjectState, now: Date) -> some View {
         let live = project.liveSessions(at: now)
         return FlowChips {
-            StatusChip(text: "\(state.label) · \(Formats.ago(project.stateSince(at: now), from: now))",
-                       swatch: state.swatch, symbol: state.symbol, prominent: state != .idle)
+            StateChip(state: state, mode: project.mode(at: now), since: Formats.ago(project.stateSince(at: now), from: now),
+                      prominent: state != .idle)
             if let milestone = project.milestone {
                 StatusChip(text: milestone, symbol: "flag.fill")
             }
@@ -89,6 +89,7 @@ struct ProjectContent: View {
                            symbol: "rectangle.stack.fill")
             }
             if let branch = project.branch { CodeChip(text: branch, symbol: "arrow.triangle.branch") }
+            LooseEndsChips(ends: project.openLooseEnds)
             if let version = project.version { CodeChip(text: version, symbol: "shippingbox.fill") }
             ForEach(project.links.sorted { $0.key < $1.key }, id: \.key) { name, link in
                 Button { Reveal.url(link) } label: { StatusChip(text: name.capitalized, swatch: .sky, symbol: "link") }
@@ -317,7 +318,8 @@ private struct SessionsCard: View {
             Spacer(minLength: 8)
             VStack(alignment: .trailing, spacing: 0) {
                 Text(Formats.ago(session.updated, from: now)).font(.display(20, weight: .heavy)).foregroundStyle(Switchyard.textSecondary)
-                TrackedLabel(state.label, size: 9, color: state == .idle ? Switchyard.textTertiary : state.swatch.color)
+                TrackedLabel(state == .working ? (session.mode?.label ?? state.label) : state.label,
+                             size: 9, color: state == .idle ? Switchyard.textTertiary : state.swatch.color)
             }
             if chat != nil {
                 Image(systemName: "arrow.up.forward")

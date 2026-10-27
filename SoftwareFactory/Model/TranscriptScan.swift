@@ -106,7 +106,7 @@ nonisolated enum TranscriptScan {
 
     /// "API Error: Can't reach the API server — check your internet" → "Can't reach the API server —
     /// check your internet", without links, a line long.
-    private static func errorText(_ text: String) -> String {
+    static func errorText(_ text: String) -> String {
         var line = text.split(separator: "\n").first.map(String.init) ?? text
         if line.hasPrefix("API Error: ") { line.removeFirst("API Error: ".count) }
         line = line.replacing(/\s*(at )?https?:\/\/\S+/, with: "").trimmingCharacters(in: CharacterSet(charactersIn: " ,."))

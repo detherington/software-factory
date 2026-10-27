@@ -99,10 +99,12 @@ It prints nothing and always exits 0, so a closed app never gets in a session's 
 |---|---|
 | `SessionStart` | Adds the session (idle) |
 | `UserPromptSubmit` | Working. The prompt's first line becomes the task; short replies like "yes" keep the task before them |
-| `PreToolUse` (AskUserQuestion, ExitPlanMode) | Needs you: the question, or "A plan is ready for your review" |
+| `PreToolUse` (AskUserQuestion, ExitPlanMode, Bash) | Needs you: the question, or "A plan is ready for your review". For Bash, what's about to run, while it runs |
 | `PostToolUse` | Working, with what it just did: "Editing Theme.swift", or a Bash command's description. TodoWrite, the desktop app's `update_plan`, and TaskCreate/TaskUpdate become the session's steps |
 | `Notification` (permission prompt) | Needs you, with Claude's message |
+| `PreCompact`, `PostCompact` | Working · Compacting, until the compaction is done |
 | `Stop` | Blocked if the turn ended on an API error; Your call (or Needs you) if Claude Desktop's next-step box asked a question; Background while work the session started hasn't reported back; otherwise Idle. Logs "Finished after 12 m" |
+| `StopFailure` | The turn ended on an API error: Blocked, with the error in words |
 | `SessionEnd` | Removes the session |
 
 **Questions and errors.** Claude Desktop's next-step box (`wrap_up`) is how a turn ends with a question for you. Its `ask` becomes the card's headline: Your call, or Needs you when the box says it's `blocked` on your answer. A turn can also stop without finishing: on an API error (no connection, out of usage credits) or because you interrupted it. Then Claude Code may not run the Stop hook, which would leave the card saying Working. So when a session on this Mac has been quiet for a minute while marked working, the board reads the last exchange in its transcript. An error turns the card Blocked, with the error in words; an interruption makes it idle.
@@ -112,6 +114,15 @@ It prints nothing and always exits 0, so a closed app never gets in a session's 
 - a scheduled wake-up (`scheduledFor`).
 
 Each ends when its `<task-notification>` arrives with a final status (`completed`, `failed`, `stopped`), when `TaskStop` stops it, or when a monitor expires or a wake-up fires. The transcript has what the hooks miss, so when a turn ends, and at launch and every three minutes for sessions that look idle, the board checks the end of the session's transcript. That catches work started while the board wasn't running (or was an older version), and notifications that never reached it. Anything left counts for six hours at most.
+
+**What working means right now.** A working card's chip says more when it can, with the matching glyph:
+- **Planning:** the session is in plan mode (`permission_mode`).
+- **Testing, Building, Shipping:** what the Bash command under way is for, from its description or the command itself. Tests, smoke runs and checks count as Testing; builds and archives as Building; TestFlight, deploys and uploads as Shipping.
+- **Compacting:** the conversation is being compacted.
+
+**Loose ends.** Discovery runs `git status --porcelain=v2 --branch` in each project's folder. Uncommitted files and commits not yet pushed show as chips on resting cards and the project page, like "± 4 changed" and "↑ 1 unpushed". On a synced board they're labeled with the Mac: "on Ratatoskr".
+
+**Keeping the hooks current.** When a new version listens to more events, the app updates the hooks it installed at launch, keeping the command they run. It backs your settings up first and leaves everything else as it was.
 
 `factory uninstall-hooks` takes them out again.
 
@@ -249,7 +260,7 @@ Every field is optional; only what's sent changes.
 - **`kind`**: `ios`, `mac`, `apple`, `game`, `web`, `site`, `cloud`, `tool`, `library` or `other`. It picks the project's symbol, and `symbol` sets any SF Symbol instead.
 - **`clear`**: empties fields: `task`, `note`, `milestone`, `progress`, `steps`, `summary` or `version`.
 
-The reply is the project as the board shows it: `state` and `label` ("Needs you"), `since`, `headline`, `steps`, `sessions`, `chat` (the Claude Desktop chat to open: `title` and its `claude://` `url`) and the last five events. Errors come back as `{"error": "…"}` with a 400 or 404.
+The reply is the project as the board shows it: `state` and `label` ("Needs you"), `since`, `headline`, `steps`, `sessions`, `mode` (planning, testing, building, shipping or compacting, while it's working), `looseEnds` (`changes` and `unpushed`, per Mac), `chat` (the Claude Desktop chat to open: `title` and its `claude://` `url`) and the last five events. Errors come back as `{"error": "…"}` with a 400 or 404.
 
 ## Data
 

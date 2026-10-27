@@ -12,6 +12,7 @@ nonisolated enum Discovery {
         var repo: String?
         /// Newest first.
         var commits: [Commit]
+        var looseEnds: LooseEnds?
     }
 
     static func scan() async -> [Found] {
@@ -70,7 +71,23 @@ nonisolated enum Discovery {
         let readme = readmeSummary(in: root)
         let (branch, commits) = gitHistory(in: root)
         return Found(root: root, lastActivity: lastActivity, kind: kind(of: root, readme: readme), readme: readme,
-                     branch: branch, repo: remote(in: root), commits: commits)
+                     branch: branch, repo: remote(in: root), commits: commits, looseEnds: looseEnds(in: root))
+    }
+
+    /// Uncommitted files and commits ahead of the upstream, from one `git status`.
+    private static func looseEnds(in root: String) -> LooseEnds? {
+        guard FileManager.default.fileExists(atPath: root + "/.git"),
+              let output = run("/usr/bin/git", ["-C", root, "status", "--porcelain=v2", "--branch"]) else { return nil }
+        var changes = 0
+        var ahead = 0
+        for line in output.split(separator: "\n") {
+            if line.hasPrefix("# branch.ab "), let plus = line.split(separator: " ").first(where: { $0.hasPrefix("+") }) {
+                ahead = Int(plus.dropFirst()) ?? 0
+            } else if !line.hasPrefix("#") {
+                changes += 1
+            }
+        }
+        return LooseEnds(changes: changes, unpushed: ahead)
     }
 
     /// The branch and the last 15 commits.

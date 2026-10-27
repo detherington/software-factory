@@ -8,6 +8,7 @@ import Foundation
 ///   starts (a linked session's news, a background task's result) keep the task they had.
 /// - PreToolUse for AskUserQuestion or ExitPlanMode, and a permission Notification: needs you.
 /// - PostToolUse: working again, with what it just did; TodoWrite and plan updates become steps.
+/// - StopFailure: the turn ended on an API error, so the session is blocked, with the error in words.
 /// - Stop: idle, its turn finished; or Background, while work it started (a background command, an
 ///   async agent, a monitor, a scheduled wake-up) hasn't reported back. SessionEnd: the session goes.
 extension ProjectStore {
@@ -37,17 +38,24 @@ extension ProjectStore {
                 if s.state != state { s.state = state; s.since = now }
             }
             if machine == nil, let transcript = payload["transcript_path"] as? String { s.transcript = transcript }
+            if let mode = payload["permission_mode"] as? String { s.planMode = mode == "plan" }
             let tool = payload["tool_name"] as? String ?? ""
             let input = payload["tool_input"] as? [String: Any] ?? [:]
 
             switch event {
             case "SessionStart":
                 // A compaction carries on mid-task; anything else starts fresh.
-                if payload["source"] as? String != "compact" { set(.idle) }
+                if payload["source"] as? String == "compact" {
+                    s.action = nil
+                    s.activity = nil
+                } else {
+                    set(.idle)
+                }
 
             case "UserPromptSubmit":
                 set(.working)
                 s.message = nil
+                s.action = nil
                 s.ask = nil
                 s.askBlocks = nil
                 let prompt = payload["prompt"] as? String ?? ""
@@ -71,6 +79,12 @@ extension ProjectStore {
                 }
 
             case "PreToolUse":
+                // A command about to run: say what it is while it runs, not after.
+                if tool == "Bash" {
+                    set(.working)
+                    s.activity = HookText.activity(tool: tool, input: input)
+                    s.action = HookText.mode(of: input)
+                }
                 if let message = HookText.waitingMessage(tool: tool, input: input) {
                     set(.waiting)
                     s.message = message
@@ -80,6 +94,8 @@ extension ProjectStore {
             case "PostToolUse":
                 set(.working)
                 s.message = nil
+                s.action = nil
+                if tool == "EnterPlanMode" { s.planMode = true }
                 s.activity = HookText.activity(tool: tool, input: input)
                 let before = s.steps
                 HookText.applySteps(tool: tool, input: input, to: &s.steps)
@@ -107,7 +123,27 @@ extension ProjectStore {
                     p.log(Event(date: now, state: .waiting, symbol: ProjectState.waiting.symbol, title: s.message!, detail: s.task))
                 }
 
+            case "PreCompact":
+                s.action = .compacting
+                s.activity = String(localized: "Compacting the conversation")
+
+            case "PostCompact":
+                s.action = nil
+                s.activity = nil
+
+            case "StopFailure":
+                // The turn ended on an API error: the transcript has it in words, or the hook does.
+                s.action = nil
+                let fromTranscript: String? = if machine == nil, case .apiError(let error) = s.transcript.flatMap(TranscriptScan.ending(of:)) { error } else { nil }
+                let error = fromTranscript
+                    ?? (payload["error"] as? String ?? payload["message"] as? String).map(TranscriptScan.errorText)
+                    ?? String(localized: "Stopped on an API error")
+                set(.blocked)
+                s.message = error
+                p.log(Event(date: now, state: .blocked, symbol: ProjectState.blocked.symbol, title: error, detail: s.task))
+
             case "Stop":
+                s.action = nil
                 let elapsed = now.timeIntervalSince(s.since)
                 // The transcript has what the hooks missed: work started while the board was down, or
                 // a notification that never reached it.
@@ -196,6 +232,19 @@ nonisolated enum HookText {
         if prompt.contains("Linked sessions now") { return String(localized: "Checking on its linked sessions") }
         if prompt.contains("<task-notification") { return String(localized: "Reading a background task's result") }
         return String(localized: "Picking up an update from the app")
+    }
+
+    /// What a command is for, from its description (Claude's words) or else the command itself:
+    /// shipping (TestFlight, deploys, uploads), testing (tests, smoke runs, checks), building.
+    static func mode(of input: [String: Any]) -> WorkMode? {
+        let description = (input["description"] as? String ?? "").lowercased()
+        let command = (input["command"] as? String ?? "").lowercased()
+        for text in [description, command] where !text.isEmpty {
+            if text.contains(/testflight|altool|notarytool|notariz|deploy|publish|upload|fastlane|app store|wrangler (deploy|publish)|vercel --prod/) { return .shipping }
+            if text.contains(/\btests?\b|\btesting\b|xcodebuild[^|;&]*\btest\b|pytest|jest|vitest|rspec|smoke|\bchecks?\b/) { return .testing }
+            if text.contains(/\bbuild(s|ing)?\b|xcodebuild|swift build|\barchive|compil|\bmake\b|\btsc\b|webpack|gradle/) { return .building }
+        }
+        return nil
     }
 
     /// Work a tool call started to come back to, from its result: a background command's

@@ -26,6 +26,11 @@ nonisolated enum BoardMerge {
                     event.machine = event.machine ?? item.machine
                     return event
                 }
+            project.looseEnds = project.looseEnds?.map { ends in
+                var ends = ends
+                ends.machine = ends.machine ?? item.machine
+                return ends
+            }
             return project
         }
         guard var merged = mine ?? tagged.first else { return nil }
@@ -65,6 +70,8 @@ nonisolated enum BoardMerge {
             merged.events += other.events.filter { !known.contains($0.id) && !($0.ref.map(knownCommits.contains) ?? false) }
 
             if let commit = other.lastCommit, commit.date > (merged.lastCommit?.date ?? .distantPast) { merged.lastCommit = commit }
+            // Each Mac's copy of the folder has its own, labeled with its Mac above.
+            merged.looseEnds = (merged.looseEnds ?? []) + (other.looseEnds ?? [])
             merged.lastActivity = max(merged.lastActivity, other.lastActivity)
         }
         merged.events.sort { $0.date > $1.date }

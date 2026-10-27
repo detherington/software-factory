@@ -43,10 +43,15 @@ nonisolated enum ClaudeSetup {
     static let events: [(name: String, matcher: String?)] = [
         ("SessionStart", nil),
         ("UserPromptSubmit", nil),
-        ("PreToolUse", "AskUserQuestion|ExitPlanMode"),
+        // Bash before it runs, to say a build or test is under way while it is.
+        ("PreToolUse", "AskUserQuestion|ExitPlanMode|Bash"),
         ("PostToolUse", "*"),
+        ("PreCompact", nil),
+        ("PostCompact", nil),
         ("Notification", nil),
         ("Stop", nil),
+        // A turn that ends on an API error runs this instead of Stop.
+        ("StopFailure", nil),
         ("SessionEnd", nil),
     ]
 
@@ -74,6 +79,28 @@ nonisolated enum ClaudeSetup {
         }
         settings["hooks"] = hooks
         return try write(settings)
+    }
+
+    /// Brings the hooks we installed up to date with `events` when a new version listens to more,
+    /// keeping the command they run (curl here, `factory hook` on another Mac). Does nothing when
+    /// they aren't installed. Returns whether it changed anything.
+    @discardableResult
+    static func upgradeIfNeeded() throws -> Bool {
+        guard isInstalled() else { return false }
+        let hooks = try readSettings()["hooks"] as? [String: Any] ?? [:]
+        let ours: [(event: String, matcher: String?, command: String)] = hooks.flatMap { event, value -> [(event: String, matcher: String?, command: String)] in
+            (value as? [[String: Any]] ?? []).compactMap { entry in
+                let handlers = entry["hooks"] as? [[String: Any]] ?? []
+                guard let command = handlers.compactMap({ $0["command"] as? String }).first(where: { command in markers.contains { command.contains($0) } })
+                else { return nil }
+                return (event, entry["matcher"] as? String, command)
+            }
+        }
+        guard let command = ours.first?.command else { return false }
+        let current = events.allSatisfy { wanted in ours.contains { $0.event == wanted.name && $0.matcher == wanted.matcher } }
+        guard !current || ours.count != events.count else { return false }
+        try install(command: command)
+        return true
     }
 
     /// Removes our hooks and nothing else.

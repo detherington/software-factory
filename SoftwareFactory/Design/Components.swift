@@ -132,6 +132,39 @@ struct CodeChip: View {
     }
 }
 
+/// A state chip that says what working means right now when it can: "Working · Testing · 4 m".
+struct StateChip: View {
+    let state: ProjectState
+    var mode: WorkMode?
+    let since: String
+    var prominent = false
+    var onFlood = false
+
+    var body: some View {
+        StatusChip(text: [state.label, mode?.label, since].compactMap { $0 }.joined(separator: " · "),
+                   swatch: state.swatch, symbol: mode?.symbol ?? state.symbol, prominent: prominent, onFlood: onFlood)
+    }
+}
+
+/// "± 4 changed", "↑ 1 unpushed on Ratatoskr": work in a project's folder that hasn't gone anywhere.
+struct LooseEndsChips: View {
+    let ends: [LooseEnds]
+
+    var body: some View {
+        ForEach(Array(ends.enumerated()), id: \.offset) { _, end in
+            let place = end.machine.map { String(localized: " on \($0)") } ?? ""
+            if end.changes > 0 {
+                CodeChip(text: String(localized: "\(end.changes) changed\(place)"), symbol: "plusminus")
+                    .help(String(localized: "Files changed or added and not committed"))
+            }
+            if end.unpushed > 0 {
+                CodeChip(text: String(localized: "\(end.unpushed) unpushed\(place)"), symbol: "arrow.up")
+                    .help(String(localized: "Commits not pushed yet"))
+            }
+        }
+    }
+}
+
 /// A filter chip: "All", "Live".
 struct FilterChip: View {
     let title: String
