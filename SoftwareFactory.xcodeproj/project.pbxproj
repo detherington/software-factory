@@ -12,9 +12,12 @@
 		09354B8B69F83A8AA31A2D49 /* factory in Embed Dependencies */ = {isa = PBXBuildFile; fileRef = F85458AA116C9B36E96F9338 /* factory */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		0CD5D2850449555885881992 /* ClaudeHook.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BC811928D0E9E9C6867A97E /* ClaudeHook.swift */; };
 		10792483EAC985226EA29329 /* HTTPServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8EBC3DB50A0488EA40BB9DD /* HTTPServer.swift */; };
+		14D4FEF683794F1659359638 /* JSONDates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A37994D244EC3366BA22E8B /* JSONDates.swift */; };
 		208432FDA18D4DF1E3A7144E /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4875B8A7B9F867027B68E27 /* SettingsView.swift */; };
 		2DF2B9F303A2D6B4C6A6936B /* Timeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4717CD16391BD36BDBFB83C9 /* Timeline.swift */; };
 		32AEB4813059494CFD9F9121 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F101127FEA2EA48928C7D6C /* Theme.swift */; };
+		345216C2EE86D945C08268C6 /* JSONDates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A37994D244EC3366BA22E8B /* JSONDates.swift */; };
+		34C1A1E74D5384B0E63CF4B5 /* TodoCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC1078298F54C740EF473105 /* TodoCard.swift */; };
 		3CA1D9593DF58336F370D7F6 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02DC087BA4748B349A065F2E /* main.swift */; };
 		5102FCA536E81E033CA94CD1 /* DesktopChats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40CE93F5B9EE1786B5009D1C /* DesktopChats.swift */; };
 		51D130A3540C8CC1C0C3B9FD /* ClaudeSetup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DE41ABF704054893FFCD764 /* ClaudeSetup.swift */; };
@@ -68,6 +71,7 @@
 /* Begin PBXFileReference section */
 		02DC087BA4748B349A065F2E /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		0643822BA032DA6D23220A7A /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		0A37994D244EC3366BA22E8B /* JSONDates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONDates.swift; sourceTree = "<group>"; };
 		0D94AE4565CC38EEEB3B6796 /* BoardMerge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardMerge.swift; sourceTree = "<group>"; };
 		1DE41ABF704054893FFCD764 /* ClaudeSetup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeSetup.swift; sourceTree = "<group>"; };
 		23AA7671D5A8D6B9C0D9E3B8 /* ServerController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerController.swift; sourceTree = "<group>"; };
@@ -88,6 +92,7 @@
 		9FB65952C565823C2FCA44E1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A725CBC37F9F5C022AD6EF80 /* Formats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formats.swift; sourceTree = "<group>"; };
 		B278C917E203FCF36CCA8BC1 /* SoftwareFactory.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SoftwareFactory.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BC1078298F54C740EF473105 /* TodoCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoCard.swift; sourceTree = "<group>"; };
 		BC4108F9413F726771B2206C /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 		BE71367B597BD9790D2529D7 /* ProjectStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectStore.swift; sourceTree = "<group>"; };
 		C4875B8A7B9F867027B68E27 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -137,6 +142,7 @@
 			isa = PBXGroup;
 			children = (
 				1DE41ABF704054893FFCD764 /* ClaudeSetup.swift */,
+				0A37994D244EC3366BA22E8B /* JSONDates.swift */,
 				5EBEF5BC108AC432DBE02618 /* ProjectPath.swift */,
 			);
 			path = Shared;
@@ -223,6 +229,7 @@
 				0643822BA032DA6D23220A7A /* RootView.swift */,
 				C4875B8A7B9F867027B68E27 /* SettingsView.swift */,
 				4717CD16391BD36BDBFB83C9 /* Timeline.swift */,
+				BC1078298F54C740EF473105 /* TodoCard.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -346,6 +353,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				FCA22CA98817A65905AC4C7A /* ClaudeSetup.swift in Sources */,
+				345216C2EE86D945C08268C6 /* JSONDates.swift in Sources */,
 				5BF27930AC61A411E263B3AC /* ProjectPath.swift in Sources */,
 				3CA1D9593DF58336F370D7F6 /* main.swift in Sources */,
 			);
@@ -365,6 +373,7 @@
 				8D85FDE9A60941EC07074EEA /* Discovery.swift in Sources */,
 				C445B28ECF6951B4E26C9E8D /* Formats.swift in Sources */,
 				10792483EAC985226EA29329 /* HTTPServer.swift in Sources */,
+				14D4FEF683794F1659359638 /* JSONDates.swift in Sources */,
 				FA87ABF0D4451D8A32D3AF7D /* MenuBarPanel.swift in Sources */,
 				72ECA72188357836E217A959 /* Navigator.swift in Sources */,
 				B213F8767BF74C55D9020DE8 /* Project.swift in Sources */,
@@ -380,6 +389,7 @@
 				9377BC6790651F2274B3AB40 /* SyncFolder.swift in Sources */,
 				32AEB4813059494CFD9F9121 /* Theme.swift in Sources */,
 				2DF2B9F303A2D6B4C6A6936B /* Timeline.swift in Sources */,
+				34C1A1E74D5384B0E63CF4B5 /* TodoCard.swift in Sources */,
 				05B22A1F26CBA0B6F1B0B487 /* TranscriptScan.swift in Sources */,
 				F7D95F73C224E6480C383666 /* Updater.swift in Sources */,
 			);

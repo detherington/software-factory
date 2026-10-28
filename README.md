@@ -11,6 +11,11 @@ A status board for every coding project on this Mac: what's being worked on, wha
   - **Menu bar:** each live project has a chat button.
 
   It works by reading the file Claude Desktop keeps for each Code chat, in `~/Library/Application Support/Claude/claude-code-sessions`, to match a session's ID to its chat. It opens the chat with `claude://code/continue?session=local_…`. Terminal sessions and other Macs' sessions have no chat to open here.
+- **To-dos.** Each project has your own to-do list, apart from Claude's plans, for things you notice or think of to tackle there:
+  - **Project page:** a To do card. Type and press Return to add; click the circle to tick one off; double-click to edit. On hover, **Start in Claude** opens a new Claude Desktop session in that folder with the to-do in its message box (`claude://code/new?folder=…&q=…`, not sent).
+  - **Board:** cards show "3 to do", and the sidebar shows the count.
+  - **Quick capture:** "Add To-Do…" in any card's menu, the field in the menu bar panel, or `factory todo "…"` in Terminal. That includes Claude, when you ask it to note something.
+  - **Sync:** the list syncs between Macs. The latest change to each item wins, and deletions are kept 30 days so they reach every Mac.
 - **Activity.** Every project's timeline, merged.
 - **Menu bar and Dock.** A raised hand and a count in the menu bar when something needs you; a bolt while work is under way. The Dock icon shows how many projects need you.
 - **One board on all your Macs.** Run Software Factory on each Mac and turn on Settings › Sync. Each board shares its projects through iCloud Drive and shows the others' with its own, labeled with each Mac's name.
@@ -187,6 +192,9 @@ factory blocked "Tests fail on iOS 27"
 factory done "Shipped 0.3 to TestFlight"
 factory idle
 factory note "Moved sync to CKSyncEngine"
+factory todo "Rename the export button"   # your to-do list for the project
+factory todos                       # lists it, numbered
+factory todo done 2                 # ticks off number 2
 factory progress 40 --milestone "TestFlight 0.3"
 factory steps --done "Design" --active "Build" --todo "Test" "Ship"
 factory advance                     # the step under way is done; start the next
@@ -218,6 +226,11 @@ The API listens on `127.0.0.1:7720`, and only on this Mac unless Other Macs is o
 | POST | `/api/report` | A report. The body says which project with `project` (id, name or code) or `path` |
 | POST | `/api/projects/{id}` | A report for that project, which is made if it's new |
 | DELETE | `/api/projects/{id}` | Hides it from the board (Settings can show it again) |
+| GET | `/api/projects/{id}/todos` | Your to-do list: `open` and `done` |
+| POST | `/api/projects/{id}/todos` | Adds one: `{"text": "…"}` |
+| PATCH | `/api/projects/{id}/todos/{todo}` | Ticks or rewords one: `{"done": true}`, `{"text": "…"}`. `{todo}` is its `id`, or its number in the open list |
+| DELETE | `/api/projects/{id}/todos/{todo}` | Deletes one |
+| POST | `/api/todos` | Adds one to the project a folder belongs to: `{"path": "…", "text": "…"}` (or `"project"`) |
 | POST | `/api/hooks/claude` | A Claude Code hook's input, unchanged |
 | GET | `/api/factory` | The `factory` command, for setting up another Mac |
 

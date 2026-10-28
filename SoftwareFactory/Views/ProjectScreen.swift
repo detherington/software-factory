@@ -24,6 +24,8 @@ struct ProjectScreen: View {
 
 struct ProjectContent: View {
     let project: Project
+    /// Snapshots draw the latest entries only: a whole timeline is too tall for one image.
+    var timelineLimit = Int.max
     @Environment(ProjectStore.self) private var store
 
     var body: some View {
@@ -55,6 +57,7 @@ struct ProjectContent: View {
             NowPanel(project: project, now: now)
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 380), spacing: 14, alignment: .top)], alignment: .leading, spacing: 14) {
+                TodoCard(project: project)
                 if let fraction = project.fraction(at: now) {
                     ProgressCard(project: project, fraction: fraction, steps: steps, swatch: state == .idle ? .slate : state.swatch)
                 }
@@ -71,7 +74,7 @@ struct ProjectContent: View {
 
             if !project.events.isEmpty {
                 SectionLabel("Timeline", trailing: String(localized: "\(project.events.count) entries"))
-                Timeline(events: project.events.map { (project, $0) }, now: now, showProject: false)
+                Timeline(events: project.events.prefix(timelineLimit).map { (project, $0) }, now: now, showProject: false)
             }
         }
     }

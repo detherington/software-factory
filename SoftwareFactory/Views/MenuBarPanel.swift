@@ -98,6 +98,7 @@ struct MenuBarContent: View {
                     .buttonStyle(.plain)
                 }
             }
+            QuickTodo()
             Rectangle().fill(Switchyard.stroke).frame(height: 1)
             HStack(spacing: 10) {
                 Button("Open Board") { open(nil) }

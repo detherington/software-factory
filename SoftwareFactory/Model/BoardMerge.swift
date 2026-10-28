@@ -70,6 +70,12 @@ nonisolated enum BoardMerge {
             merged.events += other.events.filter { !known.contains($0.id) && !($0.ref.map(knownCommits.contains) ?? false) }
 
             if let commit = other.lastCommit, commit.date > (merged.lastCommit?.date ?? .distantPast) { merged.lastCommit = commit }
+            // Your to-dos: the latest change to each item wins, wherever it was made.
+            var todos = Dictionary((merged.todos ?? []).map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+            for todo in other.todos ?? [] where todos[todo.id].map(todo.supersedes) ?? true {
+                todos[todo.id] = todo
+            }
+            merged.todos = Array(todos.values)
             // Each Mac's copy of the folder has its own, labeled with its Mac above.
             merged.looseEnds = (merged.looseEnds ?? []) + (other.looseEnds ?? [])
             merged.lastActivity = max(merged.lastActivity, other.lastActivity)

@@ -72,6 +72,12 @@ private struct SidebarRow: View {
                 .foregroundStyle(Switchyard.textSecondary)
                 .lineLimit(1)
             Spacer(minLength: 4)
+            if !project.openTodos.isEmpty {
+                Text("\(project.openTodos.count)")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Switchyard.textTertiary)
+                    .help(String(localized: "\(project.openTodos.count) to do"))
+            }
             if state != .idle {
                 Circle().fill(state.swatch.color).frame(width: 8, height: 8)
                     .accessibilityLabel(state.label)
@@ -160,6 +166,10 @@ struct ProjectMenuItems: View {
     var body: some View {
         if let chat = store.bestChat(for: project) {
             Button("Open Chat in Claude", systemImage: "bubble.left.and.text.bubble.right") { Reveal.chat(chat) }
+        }
+        Button("Add To-Do…", systemImage: "checklist") {
+            Navigator.shared.open(project.id)
+            Navigator.shared.todoFocus = project.id
         }
         if let path = project.path, project.isOnThisMac {
             Button("Show in Finder", systemImage: "folder") { Reveal.finder(path) }

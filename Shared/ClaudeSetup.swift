@@ -205,6 +205,8 @@ nonisolated enum ClaudeSetup {
         - When something ships (a release, a TestFlight build, a merged PR): `factory done "Shipped 0.3 to TestFlight"`. \
         That ticks off any steps left.
         - For anything worth a line in the project's timeline: `factory note "Moved sync to CKSyncEngine"`.
+        - My to-do list for the project: `factory todos` lists it (numbered), `factory todo "…"` adds to it when I ask \
+        you to note something for later, and `factory todo done 2` ticks one off when you've done it.
 
         \(ending)
         \(sectionEnd)

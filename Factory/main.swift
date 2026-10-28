@@ -13,6 +13,9 @@ Report (for the project in the current folder, or --project):
   factory done "Shipped 0.3 to TestFlight"             a milestone shipped
   factory idle                                         nothing happening
   factory note "Moved sync to CKSyncEngine"            a line in the timeline
+  factory todo "Rename the export button"              adds to your to-do list for the project
+  factory todos                                        lists it, numbered
+  factory todo done 2                                  ticks off number 2
   factory progress 40 [--milestone "TestFlight 0.3"]
   factory steps --done "Design" --active "Build" --todo "Test" "Ship"
   factory advance                                      the step under way is done; start the next
@@ -164,6 +167,27 @@ struct ProjectReply: Decodable {
     var events: [EventReply]?
 }
 
+struct TodoReply: Decodable {
+    var text: String
+    var done: Bool
+}
+
+struct TodoListReply: Decodable {
+    var project: String
+    var name: String?
+    var open: [TodoReply]
+    var done: [TodoReply]
+}
+
+/// The project to act on: --project, or the one the current folder belongs to.
+func projectID(_ args: Arguments, url: URL) async throws -> String {
+    if let project = args.options["project"] { return project.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? project }
+    let folder = ProjectPath.root(for: FileManager.default.currentDirectoryPath)
+    let query = folder.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed.subtracting(["&", "=", "+"])) ?? ""
+    let data = try await request("GET", "api/project?events=0&path=" + query, url: url)
+    return try decoder.decode(ProjectReply.self, from: data).id
+}
+
 struct EventReply: Decodable {
     var date: Date
     var title: String
@@ -172,7 +196,7 @@ struct EventReply: Decodable {
 
 let decoder: JSONDecoder = {
     let decoder = JSONDecoder()
-    decoder.dateDecodingStrategy = .iso8601
+    decoder.dateDecodingStrategy = JSONDates.decoding
     return decoder
 }()
 
@@ -253,6 +277,28 @@ func run(_ args: Arguments) async throws {
         try await report(withLoose, [:], url: url)
     case "advance", "next":
         try await report(args, ["advance": true], url: url)
+    case "todo":
+        if args.words.first == "done", args.words.count == 2, let number = Int(args.words[1]) {
+            let project = try await projectID(args, url: url)
+            let data = try await request("PATCH", "api/projects/\(project)/todos/\(number)", body: JSONSerialization.data(withJSONObject: ["done": true]), url: url)
+            let todo = try decoder.decode(TodoReply.self, from: data)
+            if !args.flags.contains("quiet") { print("Done: \(todo.text)") }
+            return
+        }
+        guard let text = args.message else { throw Failure.usage("factory todo \"what to tackle\"") }
+        var body: [String: Any] = ["text": text]
+        if let project = args.options["project"] { body["project"] = project } else { body["path"] = ProjectPath.root(for: FileManager.default.currentDirectoryPath) }
+        let data = try await request("POST", "api/todos", body: JSONSerialization.data(withJSONObject: body), url: url)
+        let list = try decoder.decode(TodoListReply.self, from: data)
+        if !args.flags.contains("quiet") { print("Added to \(list.name ?? list.project): \(text) (\(list.open.count) to do)") }
+    case "todos":
+        let project = try await projectID(args, url: url)
+        let data = try await request("GET", "api/projects/\(project)/todos", url: url)
+        if args.flags.contains("json") { FileHandle.standardOutput.write(data); return }
+        let list = try decoder.decode(TodoListReply.self, from: data)
+        if list.open.isEmpty { print("Nothing to do in \(list.name ?? list.project).") }
+        for (index, todo) in list.open.enumerated() { print("\(index + 1). \(todo.text)") }
+        if !list.done.isEmpty { print("(\(list.done.count) done)") }
     case "report", "status":
         try await report(args, [:], url: url)
     case "list", "ls":

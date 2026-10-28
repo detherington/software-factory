@@ -182,6 +182,29 @@ enum WorkMode: String, Codable, Sendable {
     }
 }
 
+/// Something you mean to tackle in a project: your own list, apart from Claude's plans.
+struct Todo: Codable, Identifiable, Hashable, Sendable {
+    var id = UUID()
+    var text: String
+    var done = false
+    var created: Date
+    /// When it last changed. Across Macs, the latest change to each item wins.
+    var updated: Date
+    var completed: Date?
+    /// Deleted: kept for a while so the deletion reaches the other Macs instead of their copies
+    /// bringing it back.
+    var deleted = false
+
+    /// Whether this copy wins over another of the same to-do: the later change, and on a tie the
+    /// same pick on every Mac (a deletion, then a tick, then the text).
+    func supersedes(_ other: Todo) -> Bool {
+        if updated != other.updated { return updated > other.updated }
+        if deleted != other.deleted { return deleted }
+        if done != other.done { return done }
+        return text > other.text
+    }
+}
+
 /// Work in a project's folder that hasn't gone anywhere yet: uncommitted changes, unpushed commits.
 struct LooseEnds: Codable, Hashable, Sendable {
     /// Files changed or added and not committed.
@@ -331,6 +354,8 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
     var lastCommit: Commit?
     /// Uncommitted and unpushed work, one entry per Mac that has the folder.
     var looseEnds: [LooseEnds]?
+    /// Your to-do list for it.
+    var todos: [Todo]?
     var created: Date
     /// The newest sign of life from anywhere: a report, a hook, a transcript, a commit.
     var lastActivity: Date
@@ -373,6 +398,7 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
         events = try c.decodeIfPresent([Event].self, forKey: .events) ?? []
         lastCommit = try c.decodeIfPresent(Commit.self, forKey: .lastCommit)
         looseEnds = try c.decodeIfPresent([LooseEnds].self, forKey: .looseEnds)
+        todos = try c.decodeIfPresent([Todo].self, forKey: .todos)
         let created = try c.decodeIfPresent(Date.self, forKey: .created) ?? .now
         self.created = created
         reportedAt = try c.decodeIfPresent(Date.self, forKey: .reportedAt) ?? created
@@ -447,6 +473,13 @@ extension Project {
         guard state(at: now) == .working else { return nil }
         return liveSessions(at: now).first { $0.state == .working && $0.mode != nil }?.mode
     }
+
+    /// Your to-dos still to do, oldest first, and the ones done, latest first.
+    var openTodos: [Todo] {
+        (todos ?? []).filter { !$0.deleted && !$0.done }
+            .sorted { $0.created != $1.created ? $0.created < $1.created : $0.id.uuidString < $1.id.uuidString }
+    }
+    var doneTodos: [Todo] { (todos ?? []).filter { !$0.deleted && $0.done }.sorted { ($0.completed ?? $0.updated) > ($1.completed ?? $1.updated) } }
 
     /// Loose ends worth showing: the ones that aren't empty.
     var openLooseEnds: [LooseEnds] { (looseEnds ?? []).filter { !$0.isEmpty } }

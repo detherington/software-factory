@@ -9,6 +9,11 @@ import Foundation
 ///     POST   /api/report                a status report; says which project in its body
 ///     POST   /api/projects/{id}         a status report for that project
 ///     DELETE /api/projects/{id}         hides it from the board
+///     GET    /api/projects/{id}/todos   your to-do list for it
+///     POST   /api/projects/{id}/todos   adds one: {"text": "…"}
+///     PATCH  /api/projects/{id}/todos/{todo}   ticks or rewords one: {"done": true}, {"text": "…"}
+///     DELETE /api/projects/{id}/todos/{todo}   deletes one ({todo}: its id, or its number in the open list)
+///     POST   /api/todos                 adds one to the project a folder belongs to: {"path": "…", "text": "…"}
 ///     POST   /api/hooks/claude          a Claude Code hook's input, unchanged
 ///     GET    /api/factory               the factory command, for setting up another Mac
 ///
@@ -39,10 +44,15 @@ enum API {
         }
 
         // "api/projects/tachyon-drifter" matches "api/projects/*", with "tachyon-drifter" as the key.
+        // "api/projects/tachyon-drifter/todos/2" matches "api/projects/*/todos/*", with the project and
+        // the to-do as keys.
         let parts = request.path.split(separator: "/").map(String.init)
-        let isProject = parts.count == 3 && parts[0] == "api" && parts[1] == "projects"
-        let route = isProject ? "api/projects/*" : parts.joined(separator: "/")
+        let isProject = parts.count >= 3 && parts[0] == "api" && parts[1] == "projects"
+        let route = isProject
+            ? (["api", "projects", "*"] + parts.dropFirst(3).enumerated().map { $0.offset == 1 ? "*" : $0.element }).joined(separator: "/")
+            : parts.joined(separator: "/")
         let key = isProject ? parts[2] : ""
+        let todoKey = parts.count == 5 ? parts[4] : ""
         do {
             switch (request.method, route) {
             case ("GET", ""):
@@ -80,6 +90,31 @@ enum API {
                 guard let project = store.find(key) else { throw ReportError.notFound(key) }
                 store.setHidden(project.id, true)
                 return try encode(ProjectDTO(store[project.id]!, at: store.now, events: 0))
+            case ("GET", "api/projects/*/todos"):
+                guard let project = store.find(key) else { throw ReportError.notFound(key) }
+                return try encode(TodoList(project: project.id, name: project.name, open: project.openTodos, done: project.doneTodos))
+            case ("POST", "api/projects/*/todos"):
+                guard let project = store.find(key) else { throw ReportError.notFound(key) }
+                return try addTodo(decode(TodoInput.self, from: request.body), to: project.id, store: store)
+            case ("POST", "api/todos"):
+                let input = try decode(TodoInput.self, from: request.body)
+                // Found, not reported to: a report would stamp the project and could outrank another Mac's newer one.
+                let byName = input.project.flatMap { store.find($0)?.id }
+                guard let id = byName ?? (input.path ?? input.cwd).flatMap({ store.projectID(forPath: $0, create: true, machine: machine) }) else {
+                    throw ReportError.noProject
+                }
+                return try addTodo(input, to: id, store: store)
+            case ("PATCH", "api/projects/*/todos/*"), ("PUT", "api/projects/*/todos/*"), ("POST", "api/projects/*/todos/*"):
+                guard let project = store.find(key) else { throw ReportError.notFound(key) }
+                guard let todo = findTodo(todoKey, in: project) else { throw ReportError.notFound(todoKey) }
+                let input = try decode(TodoInput.self, from: request.body)
+                store.changeTodo(todo.id, in: project.id, done: input.done, text: input.text)
+                return try encode(store[project.id]?.todos?.first { $0.id == todo.id })
+            case ("DELETE", "api/projects/*/todos/*"):
+                guard let project = store.find(key) else { throw ReportError.notFound(key) }
+                guard let todo = findTodo(todoKey, in: project) else { throw ReportError.notFound(todoKey) }
+                store.deleteTodo(todo.id, in: project.id)
+                return try encode(TodoList(project: project.id, name: project.name, open: store[project.id]?.openTodos ?? [], done: store[project.id]?.doneTodos ?? []))
             case ("POST", "api/hooks/claude"):
                 guard let payload = try JSONSerialization.jsonObject(with: request.body) as? [String: Any] else {
                     return .error(400, "Send the hook's JSON input as the body.")
@@ -104,7 +139,8 @@ enum API {
                 let written = Snapshot.write(to: URL(fileURLWithPath: directory), store: store)
                 return .json(try JSONSerialization.data(withJSONObject: ["written": written], options: .prettyPrinted))
             #endif
-            case (_, "api/projects/*"), (_, "api/projects"), (_, "api/project"), (_, "api/report"), (_, "api/hooks/claude"):
+            case (_, "api/projects/*"), (_, "api/projects"), (_, "api/project"), (_, "api/report"), (_, "api/hooks/claude"),
+                 (_, "api/projects/*/todos"), (_, "api/projects/*/todos/*"), (_, "api/todos"):
                 return .error(405, "\(request.method) isn't supported here.")
             default:
                 return .error(404, "Nothing at \(request.path). GET / lists the endpoints.")
@@ -123,6 +159,19 @@ enum API {
         guard let host else { return true }
         let name = host.hasPrefix("[") ? String(host.prefix { $0 != "]" }.dropFirst()) : String(host.split(separator: ":").first ?? "")
         return ["127.0.0.1", "localhost", "::1"].contains(name.lowercased())
+    }
+
+    private static func addTodo(_ input: TodoInput, to id: String, store: ProjectStore) throws -> HTTPResponse {
+        guard let text = input.text?.trimmed else { return .error(400, "Send the to-do as \"text\".") }
+        store.addTodo(text, to: id)
+        let project = store[id]
+        return try encode(TodoList(project: id, name: project?.name, open: project?.openTodos ?? [], done: project?.doneTodos ?? []))
+    }
+
+    /// A to-do by its id, or by its number in the open list ("2" is the second still to do).
+    private static func findTodo(_ key: String, in project: Project) -> Todo? {
+        if let number = Int(key), project.openTodos.indices.contains(number - 1) { return project.openTodos[number - 1] }
+        return project.todos?.first { $0.id.uuidString.caseInsensitiveCompare(key) == .orderedSame && !$0.deleted }
     }
 
     /// "Bearer <token>", compared in constant time.
@@ -197,6 +246,21 @@ private struct Health: Encodable {
     var projects: Int
 }
 
+private struct TodoInput: Decodable {
+    var text: String?
+    var done: Bool?
+    var project: String?
+    var path: String?
+    var cwd: String?
+}
+
+private struct TodoList: Encodable {
+    var project: String
+    var name: String?
+    var open: [Todo]
+    var done: [Todo]
+}
+
 private struct ProjectList: Encodable {
     var projects: [ProjectDTO]
 }
@@ -229,6 +293,8 @@ struct ProjectDTO: Encodable {
     /// What a working session is doing: planning, testing, building, shipping, compacting.
     var mode: WorkMode?
     var looseEnds: [LooseEnds]
+    /// Your to-dos: still to do, then done.
+    var todos: [Todo]
     var hidden: Bool
     /// The Claude Desktop chat to open for it, on this Mac: its title and claude:// link.
     var chat: Chat?
@@ -267,6 +333,7 @@ struct ProjectDTO: Encodable {
         lastCommit = p.lastCommit
         mode = p.mode(at: now)
         looseEnds = p.openLooseEnds
+        todos = p.openTodos + p.doneTodos
         hidden = p.hidden
         chat = ProjectStore.shared.bestChat(for: p).flatMap { chat in chat.url.map { Chat(title: chat.title, url: $0.absoluteString) } }
         events = limit > 0 ? Array(p.events.prefix(limit)) : nil

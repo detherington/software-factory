@@ -225,9 +225,13 @@ struct ProjectCard: View {
                     .lineLimit(2, reservesSpace: true)
                     .multilineTextAlignment(.leading)
                 let ends = project.openLooseEnds
-                if !ends.isEmpty {
-                    HStack(spacing: 6) { LooseEndsChips(ends: ends) }
-                        .padding(.top, 2)
+                let todos = project.openTodos.count
+                if !ends.isEmpty || todos > 0 {
+                    HStack(spacing: 6) {
+                        if todos > 0 { StatusChip(text: String(localized: "\(todos) to do"), symbol: "checklist") }
+                        LooseEndsChips(ends: ends)
+                    }
+                    .padding(.top, 2)
                 }
                 if !steps.isEmpty {
                     Strip.steps(steps, color: state == .idle ? Switchyard.textSecondary : state.swatch.color, track: Switchyard.surfaceRaised)

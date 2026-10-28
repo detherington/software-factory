@@ -360,6 +360,59 @@ final class ProjectStore {
         return id
     }
 
+    // MARK: - To-dos
+
+    @discardableResult
+    func addTodo(_ text: String, to id: String) -> Todo? {
+        guard let text = text.trimmed else { return nil }
+        let now = Date.now
+        let todo = Todo(text: text, created: now, updated: now)
+        update(id) { p in p.todos = Self.pruned((p.todos ?? []) + [todo], at: now) }
+        return todo
+    }
+
+    /// Ticks, unticks or rewords one.
+    func changeTodo(_ todoID: UUID, in id: String, done: Bool? = nil, text: String? = nil) {
+        editTodo(todoID, in: id) { todo, now in
+            if let text = text?.trimmed { todo.text = text }
+            if let done, done != todo.done {
+                todo.done = done
+                todo.completed = done ? now : nil
+            }
+        }
+    }
+
+    func deleteTodo(_ todoID: UUID, in id: String) {
+        editTodo(todoID, in: id) { todo, _ in todo.deleted = true }
+    }
+
+    func clearDoneTodos(in id: String) {
+        for todo in self[id]?.doneTodos ?? [] { deleteTodo(todo.id, in: id) }
+    }
+
+    /// Changes a to-do in this Mac's copy of the project, taking it from the merged board first when
+    /// it came from another Mac, so the change syncs back.
+    private func editTodo(_ todoID: UUID, in id: String, _ change: (inout Todo, Date) -> Void) {
+        guard var todo = projects[id]?.todos?.first(where: { $0.id == todoID }) else { return }
+        let now = Date.now
+        let wasDone = todo.done
+        change(&todo, now)
+        todo.updated = now
+        update(id) { p in
+            var todos = (p.todos ?? []).filter { $0.id != todoID }
+            todos.append(todo)
+            p.todos = Self.pruned(todos, at: now)
+            if todo.done, !wasDone, !todo.deleted {
+                p.log(Event(date: now, state: .done, symbol: "checkmark.square.fill", title: todo.text, detail: String(localized: "To-do done")))
+            }
+        }
+    }
+
+    /// Deletions are kept 30 days, long enough to reach every Mac.
+    private static func pruned(_ todos: [Todo], at now: Date) -> [Todo] {
+        todos.filter { !$0.deleted || now.timeIntervalSince($0.updated) < 30 * 24 * 3600 }
+    }
+
     func setHidden(_ id: String, _ hidden: Bool) {
         update(id) { $0.hidden = hidden }
     }
@@ -711,14 +764,14 @@ final class ProjectStore {
 
     static let encoder: JSONEncoder = {
         let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
+        encoder.dateEncodingStrategy = JSONDates.encoding
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         return encoder
     }()
 
     static let decoder: JSONDecoder = {
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        decoder.dateDecodingStrategy = JSONDates.decoding
         return decoder
     }()
 }

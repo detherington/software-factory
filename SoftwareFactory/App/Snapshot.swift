@@ -29,7 +29,7 @@ enum Snapshot {
 
         render(BoardContent().padding(28), width: 1240, name: "board.png")
         for project in store.board.prefix(3) {
-            render(ProjectContent(project: project).padding(28), width: 1100, name: "project-\(project.id).png")
+            render(ProjectContent(project: project, timelineLimit: 8).padding(28), width: 1100, name: "project-\(project.id).png")
         }
         render(ActivityContent(limit: 24).padding(28), width: 1000, name: "activity.png")
         render(MenuBarContent { _ in }, width: 380, name: "menu.png")
