@@ -269,6 +269,9 @@ struct Session: Codable, Identifiable, Hashable, Sendable {
     /// box said it can't go on without an answer.
     var ask: String?
     var askBlocks: Bool?
+    /// Its chat's Remote Control session on claude.ai ("session_…"), when the chat is in Claude
+    /// Desktop and has Remote Control on: the Claude app opens it, to answer from the iPhone.
+    var remoteControl: String?
     /// What its current tool call is doing (a test run, a build, an upload, a compaction), and
     /// whether it's in plan mode.
     var action: WorkMode?
@@ -285,6 +288,11 @@ struct Session: Codable, Identifiable, Hashable, Sendable {
 extension Session {
     /// The tool call under way says more than plan mode does.
     var mode: WorkMode? { action ?? (planMode == true ? .planning : nil) }
+
+    /// Its chat in the Claude app, through Remote Control.
+    var claudeURL: URL? {
+        remoteControl.flatMap { URL(string: "https://claude.ai/code/\($0)") }
+    }
 
     func pendingJobs(at now: Date) -> [BackgroundJob] {
         (background ?? []).filter { $0.isPending(at: now) }

@@ -24,6 +24,9 @@ extension ProjectStore {
         if machine == nil, chatsBySession[sessionID] == nil, chatLookups[sessionID, default: 0] < 3 {
             chatLookups[sessionID, default: 0] += 1
             refreshDesktopChats(after: .seconds(2))
+        } else if machine == nil, event == "Stop" || event == "Notification" {
+            // When a turn ends or asks is when its chat's Remote Control link matters: read it again.
+            refreshDesktopChats(after: .seconds(2))
         }
 
         return update(id) { p in

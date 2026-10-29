@@ -13,6 +13,8 @@ nonisolated enum DesktopChats {
         var cwd: String?
         var lastActivity: Date?
         var isArchived: Bool
+        /// Its Remote Control session on claude.ai ("session_…"), while Remote Control is on.
+        var remoteControl: String?
 
         /// Opens the chat in Claude Desktop.
         var url: URL? {
@@ -34,24 +36,41 @@ nonisolated enum DesktopChats {
             .compactMap(read)
     }
 
-    /// The fields come first in each file, before its tool settings, which can run to half a megabyte:
-    /// read the head, and the whole file only if the head doesn't have them.
+    /// Most fields come first in each file, before its tool settings, which can run to half a megabyte,
+    /// and Remote Control's come after them: read the head and the tail, and the whole file only if the
+    /// head doesn't have its ids.
     private static func read(_ file: URL) -> Chat? {
         guard let handle = try? FileHandle(forReadingFrom: file) else { return nil }
         defer { try? handle.close() }
         let head = String(decoding: (try? handle.read(upToCount: 32 * 1024)) ?? Data(), as: UTF8.self)
         let id = file.deletingPathExtension().lastPathComponent
         if let cli = string("cliSessionId", in: head) {
+            var tail = ""
+            if let end = try? handle.seekToEnd(), end > 32 * 1024 {
+                try? handle.seek(toOffset: end - min(end - 32 * 1024, 64 * 1024))
+                tail = String(decoding: (try? handle.readToEnd()) ?? Data(), as: UTF8.self)
+            }
             return Chat(id: id, cliSessionID: cli, title: string("title", in: head), cwd: string("originCwd", in: head) ?? string("cwd", in: head),
                         lastActivity: number("lastActivityAt", in: head).map { Date(timeIntervalSince1970: $0 / 1000) },
-                        isArchived: head.contains(#""isArchived":true"#))
+                        isArchived: head.contains(#""isArchived":true"#),
+                        remoteControl: remoteControl(in: tail) ?? remoteControl(in: head))
         }
         guard let data = try? Data(contentsOf: file),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
         return Chat(id: id, cliSessionID: json["cliSessionId"] as? String, title: json["title"] as? String,
                     cwd: json["originCwd"] as? String ?? json["cwd"] as? String,
                     lastActivity: (json["lastActivityAt"] as? Double).map { Date(timeIntervalSince1970: $0 / 1000) },
-                    isArchived: json["isArchived"] as? Bool ?? false)
+                    isArchived: json["isArchived"] as? Bool ?? false,
+                    remoteControl: json["remoteControlUserEnabled"] as? Bool == false ? nil : (json["bridgeSessionIds"] as? [String])?.last)
+    }
+
+    /// Desktop adds a Remote Control session each time it connects a chat, newest last, and sets
+    /// `remoteControlUserEnabled` to false when you turn Remote Control off.
+    private static func remoteControl(in text: String) -> String? {
+        guard !text.contains(#""remoteControlUserEnabled":false"#),
+              let range = text.range(of: #""bridgeSessionIds":["#),
+              let list = text[range.upperBound...].prefixMatch(of: /[^\]]*/) else { return nil }
+        return list.0.matches(of: /"(session_[A-Za-z0-9]+)"/).last.map { String($0.1) }
     }
 
     /// A top-level string field's value, unescaped.

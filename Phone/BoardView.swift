@@ -68,10 +68,7 @@ struct BoardView: View {
                 }
                 if !live.isEmpty {
                     SectionLabel(String(localized: "Now"))
-                    ForEach(live) { project in
-                        NavigationLink(value: project.id) { LiveTile(project: project, now: now) }
-                            .buttonStyle(.plain)
-                    }
+                    ForEach(live) { LiveTile(project: $0, now: now) }
                 }
                 if !resting.isEmpty {
                     SectionLabel(String(localized: "Projects"), trailing: "\(resting.count)")
@@ -150,15 +147,29 @@ private struct Counts: View {
     }
 }
 
-/// A live project as a flood of its state's color.
+/// A live project as a flood of its state's color, with a way to answer it in the Claude app when
+/// it's asking you something.
 private struct LiveTile: View {
     let project: Project
     let now: Date
 
     var body: some View {
         let state = project.state(at: now)
+        VStack(alignment: .leading, spacing: 14) {
+            NavigationLink(value: project.id) { content(state) }
+                .buttonStyle(.plain)
+            if let session = project.answerable(at: now) {
+                AnswerLink(session: session, onFlood: true)
+            }
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(state.swatch.gradient, in: .rect(cornerRadius: Switchyard.cardRadius, style: .continuous))
+    }
+
+    private func content(_ state: ProjectState) -> some View {
         let steps = project.displaySteps(at: now)
-        VStack(alignment: .leading, spacing: 8) {
+        return VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
                 TrackedLabel(project.code, size: 11, color: Switchyard.ink.opacity(0.72))
                 Spacer(minLength: 8)
@@ -181,9 +192,7 @@ private struct LiveTile: View {
                     .padding(.top, 2)
             }
         }
-        .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(state.swatch.gradient, in: .rect(cornerRadius: Switchyard.cardRadius, style: .continuous))
         .contentShape(.rect)
     }
 }

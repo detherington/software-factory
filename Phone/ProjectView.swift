@@ -79,6 +79,8 @@ struct ProjectView: View {
                             if let machine = session.machine {
                                 Text("On \(machine)").font(.system(size: 12)).foregroundStyle(Switchyard.textTertiary)
                             }
+                            AnswerLink(session: session)
+                                .padding(.top, 4)
                         }
                         .padding(.vertical, 4)
                     }
@@ -207,6 +209,15 @@ private struct Now: View {
                     Label(activity, systemImage: "waveform")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Switchyard.ink.opacity(0.8))
+                }
+                if let session = project.openable(at: now) {
+                    AnswerLink(session: session, onFlood: true)
+                        .padding(.top, 8)
+                } else if state.asksYou {
+                    Text("To answer from here, turn on Remote Control for its chat in Claude on your Mac.")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Switchyard.ink.opacity(0.72))
+                        .padding(.top, 4)
                 }
             }
             .padding(20)

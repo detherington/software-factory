@@ -44,6 +44,8 @@ final class PhoneBoard {
             digest = UserDefaults.standard.string(forKey: "FactorySampleDigest")
                 .flatMap { try? Data(contentsOf: URL(fileURLWithPath: $0)) }
                 .flatMap { CloudBoard.decode(Digest.self, from: $0) }
+            // `-FactoryOpen <project id | today>`: starts there, as a link would, without iOS asking first.
+            opened = UserDefaults.standard.string(forKey: "FactoryOpen")
             #endif
             fetched = .now
         } else if let cache = BoardCache.read() {

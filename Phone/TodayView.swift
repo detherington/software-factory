@@ -44,7 +44,8 @@ struct TodayView: View {
             SectionLabel(String(localized: "Waiting on you"), trailing: "\(digest.waiting.count)")
             Card(padding: 16) {
                 ForEach(digest.waiting) { nudge in
-                    NudgeRow(nudge: nudge, swatch: (nudge.state ?? .waiting).swatch, now: now) {
+                    let answer = board[nudge.project]?.sessions.first { $0.id == nudge.session }?.claudeURL
+                    NudgeRow(nudge: nudge, swatch: (nudge.state ?? .waiting).swatch, now: now, answer: answer) {
                         let place = nudge.machine.map { String(localized: "On \($0)") }
                         let line = [nudge.detail, place].compactMap { $0 }.joined(separator: " · ")
                         Text(line.isEmpty ? (nudge.state ?? .waiting).label : line)
@@ -130,11 +131,13 @@ private struct Numbers: View {
     }
 }
 
-/// A nudge: the project's code on a tile, its name and what's up, how long, and a snooze.
+/// A nudge: the project's code on a tile, its name and what's up, how long, a way to answer it in the
+/// Claude app, and a snooze.
 private struct NudgeRow<Detail: View>: View {
     let nudge: Nudge
     let swatch: Swatch
     let now: Date
+    var answer: URL? = nil
     @ViewBuilder var detail: Detail
     @Environment(PhoneBoard.self) private var board
 
@@ -159,6 +162,16 @@ private struct NudgeRow<Detail: View>: View {
                 .contentShape(.rect)
             }
             .buttonStyle(.plain)
+            if let answer {
+                Link(destination: answer) {
+                    Image(systemName: "arrow.up.forward.app.fill")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(Switchyard.accent)
+                        .frame(width: 32, height: 32)
+                        .contentShape(.rect)
+                }
+                .accessibilityLabel(String(localized: "Answer in Claude"))
+            }
             SnoozeMenu(nudge: nudge)
         }
         .padding(.vertical, 4)

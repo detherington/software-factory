@@ -459,6 +459,20 @@ final class ProjectStore {
             self?.desktopChats = chats
             self?.chatsBySession = Dictionary(chats.compactMap { chat in chat.cliSessionID.map { ($0, chat) } }, uniquingKeysWith: { a, _ in a })
             self?.putAwayArchivedQuestions()
+            self?.linkRemoteControl()
+        }
+    }
+
+    /// Each Claude Desktop session's Remote Control link, for answering it from the iPhone.
+    private func linkRemoteControl() {
+        for project in local.values {
+            for session in project.sessions where session.machine == nil && session.remoteControl != chat(for: session)?.remoteControl {
+                let link = chat(for: session)?.remoteControl
+                update(project.id) { p in
+                    guard let index = p.sessions.firstIndex(where: { $0.id == session.id }) else { return }
+                    p.sessions[index].remoteControl = link
+                }
+            }
         }
     }
 
