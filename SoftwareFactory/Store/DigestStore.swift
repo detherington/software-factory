@@ -132,31 +132,39 @@ final class DigestStore {
         let now = Date.now
         Notifier.shared.remind(ProjectStore.shared.projects, now: now)
         await readOtherMacs()
-        guard isOn, isDue(at: now), !isSending else { return }
-        // When you're at the Mac: you've moved the mouse or typed in the last two minutes.
-        if (ignoresPresence || Presence.secondsSinceInput < 120) && !PhoneShare.shared.pretendsAway {
-            await send(now: now)
-            return
-        }
-        // Nobody at any Mac three hours after the digest's time: it goes to the iPhone instead.
+        guard isOn, Self.isDue(at: now, minutes: minutes, weekdaysOnly: weekdaysOnly, record: state.record), !isSending else { return }
         let calendar = Calendar.current
         let time = calendar.date(byAdding: .minute, value: minutes, to: calendar.startOfDay(for: now)) ?? now
         let phone = PhoneShare.shared
-        if now >= time.addingTimeInterval(Self.phoneAfter), phone.reachesPhone, phone.lastUsedAnyMac < time {
-            await send(now: now, toPhone: true)
+        // When you're at the Mac: you've moved the mouse or typed in the last two minutes.
+        let present = (ignoresPresence || Presence.secondsSinceInput < 120) && !phone.pretendsAway
+        switch Self.route(now: now, time: time, present: present, reachesPhone: phone.reachesPhone, lastUsedAnyMac: phone.lastUsedAnyMac) {
+        case .here: await send(now: now)
+        case .phone: await send(now: now, toPhone: true)
+        case nil: break
         }
     }
 
     /// How long after the digest's time it goes to the iPhone, when nobody has been at a Mac.
-    static let phoneAfter: TimeInterval = 3 * 3600
+    nonisolated static let phoneAfter: TimeInterval = 3 * 3600
+
+    nonisolated enum Route: Equatable, Sendable { case here, phone }
+
+    /// Where a due digest goes now: here when you're at this Mac; to the iPhone when nobody has been
+    /// at any Mac by three hours after its time and the iPhone can get it; otherwise, nowhere yet.
+    nonisolated static func route(now: Date, time: Date, present: Bool, reachesPhone: Bool, lastUsedAnyMac: Date) -> Route? {
+        if present { return .here }
+        if now >= time.addingTimeInterval(phoneAfter), reachesPhone, lastUsedAnyMac < time { return .phone }
+        return nil
+    }
 
     /// Past today's time, on a digest day, and not sent today by this Mac or another.
-    private func isDue(at now: Date) -> Bool {
+    nonisolated static func isDue(at now: Date, minutes: Int, weekdaysOnly: Bool, record: DigestState.Record?) -> Bool {
         let calendar = Calendar.current
         if weekdaysOnly, calendar.isDateInWeekend(now) { return false }
         guard now >= calendar.date(byAdding: .minute, value: minutes, to: calendar.startOfDay(for: now)) ?? now else { return false }
         var keys = DayKeys()
-        return state.record?.day != keys.key(for: now)
+        return record?.day != keys.key(for: now)
     }
 
     /// Makes today's digest and sends it, unless there's nothing to say: as a notification here, or as

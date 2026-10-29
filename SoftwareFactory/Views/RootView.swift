@@ -208,3 +208,20 @@ struct ProjectMenuItems: View {
         }
     }
 }
+
+extension View {
+    /// Shared stores plus Switchyard's tint and dark-first appearance, for every scene.
+    func factoryEnvironment() -> some View {
+        environment(ProjectStore.shared)
+            .environment(Navigator.shared)
+            .environment(Updater.shared)
+            .environment(Notifier.shared)
+            .environment(AppStoreWatcher.shared)
+            .environment(PassportStore.shared)
+            .environment(PromptStore.shared)
+            .environment(DigestStore.shared)
+            .environment(PhoneShare.shared)
+            .tint(Switchyard.accent)
+            .preferredColorScheme(.dark)
+    }
+}

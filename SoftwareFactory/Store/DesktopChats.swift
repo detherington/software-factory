@@ -22,8 +22,10 @@ nonisolated enum DesktopChats {
         }
     }
 
+    /// `-FactoryDesktopChats <folder>` reads chats from there instead (for tests).
     static var folder: URL {
-        URL(fileURLWithPath: NSHomeDirectory())
+        if let custom = UserDefaults.standard.string(forKey: "FactoryDesktopChats") { return URL(fileURLWithPath: custom, isDirectory: true) }
+        return URL(fileURLWithPath: NSHomeDirectory())
             .appending(path: "Library/Application Support/Claude/claude-code-sessions", directoryHint: .isDirectory)
     }
 
@@ -39,7 +41,7 @@ nonisolated enum DesktopChats {
     /// Most fields come first in each file, before its tool settings, which can run to half a megabyte,
     /// and Remote Control's come after them: read the head and the tail, and the whole file only if the
     /// head doesn't have its ids.
-    private static func read(_ file: URL) -> Chat? {
+    static func read(_ file: URL) -> Chat? {
         guard let handle = try? FileHandle(forReadingFrom: file) else { return nil }
         defer { try? handle.close() }
         let head = String(decoding: (try? handle.read(upToCount: 32 * 1024)) ?? Data(), as: UTF8.self)

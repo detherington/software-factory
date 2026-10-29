@@ -31,6 +31,9 @@ targets:
   SoftwareFactory:
     type: application
     platform: macOS
+    # The tests run with the app's scheme: xcodebuild test -scheme SoftwareFactory.
+    scheme:
+      testTargets: [SoftwareFactoryTests]
     sources:
       - path: SoftwareFactory
       - path: Shared
@@ -77,6 +80,27 @@ targets:
         # The clone this copy was built from, which Settings › Updates pulls and builds.
         FactorySourceFolder: $(SRCROOT)
         FactoryCloudKitContainer: $(FACTORY_CLOUDKIT_CONTAINER)
+  # The board's logic, tested without the app: the tests compile its sources themselves, so nothing
+  # launches, listens on the API's port or reads the app's settings. Tests/TestBoard.swift keeps
+  # their settings in memory and their files in a temporary folder.
+  SoftwareFactoryTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests
+      - path: SoftwareFactory
+        excludes:
+          - App/SoftwareFactoryApp.swift
+          - Resources
+      - path: Shared
+      - path: PhoneKit/CloudBoard.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.darrell.softwarefactory.tests
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        DEVELOPMENT_TEAM: ""
   factory:
     type: tool
     platform: macOS
@@ -92,6 +116,7 @@ targets:
   SoftwareFactoryPhone:
     type: application
     platform: iOS
+    scheme: {}
     sources:
       - path: Phone
       - path: PhoneWidgets/WidgetViews.swift

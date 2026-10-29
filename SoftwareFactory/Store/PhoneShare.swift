@@ -265,22 +265,24 @@ final class PhoneShare {
     private func readInbox() async {
         guard let database else { return }
         guard let changes = try? await CloudBoard.fetchChanges(from: database), !changes.isEmpty else { return }
-        let store = ProjectStore.shared
-        var done: [CKRecord.ID] = []
-        for (id, change) in changes {
-            switch change.kind {
-            case .todo:
-                guard let todo = change.todo, let project = change.project else { done.append(id); continue }
-                let here = store.projectID(matching: project, name: change.projectName ?? project, repo: nil)
-                if store.mergeTodo(todo, into: here) || Date.now.timeIntervalSince(todo.updated) > 86_400 { done.append(id) }
-            case .snooze:
-                if let nudge = change.nudge, let snooze = change.snooze { DigestStore.shared.applySnooze(snooze, to: nudge) }
-                done.append(id)
-            }
-        }
+        let done = changes.filter { Self.fold($0.change, into: ProjectStore.shared, digests: DigestStore.shared) }.map(\.id)
         guard !done.isEmpty else { return }
         _ = try? await database.modifyRecords(saving: [], deleting: done, atomically: false)
         log.info("Folded in \(done.count) changes from the iPhone")
+    }
+
+    /// Folds one change from the iPhone into the board, and says whether it's done with, so the inbox
+    /// can let it go. A to-do for a project no Mac has heard of yet waits a day for one to.
+    static func fold(_ change: CloudBoard.Change, into store: ProjectStore, digests: DigestStore, now: Date = .now) -> Bool {
+        switch change.kind {
+        case .todo:
+            guard let todo = change.todo, let project = change.project else { return true }
+            let here = store.projectID(matching: project, name: change.projectName ?? project, repo: nil)
+            return store.mergeTodo(todo, into: here) || now.timeIntervalSince(todo.updated) > 86_400
+        case .snooze:
+            if let nudge = change.nudge, let snooze = change.snooze { digests.applySnooze(snooze, to: nudge) }
+            return true
+        }
     }
 
     // MARK: - For the digest

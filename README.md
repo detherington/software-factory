@@ -369,6 +369,12 @@ xcodegen generate
 xcodebuild -project SoftwareFactory.xcodeproj -scheme SoftwareFactory -derivedDataPath build/DerivedData build
 ```
 
+The tests cover the board's logic: hooks becoming a session's state (questions, permissions, blocks, background work, Claude Desktop stopping and resuming a chat), boards from several Macs merging, changes from the iPhone, the morning digest, and reading Claude Desktop's chat files. They run without the app, compiling its sources into the test bundle, so nothing launches or listens on the API's port, and `Tests/TestBoard.swift` holds their settings in memory and their files in a temporary folder: they never read or change your board, your settings, Claude Desktop's chats or iCloud.
+
+```bash
+xcodebuild -project SoftwareFactory.xcodeproj -scheme SoftwareFactory -derivedDataPath build/DerivedData test
+```
+
 To run a test copy beside the real one without touching your board:
 
 ```bash
@@ -389,5 +395,6 @@ Debug builds add `POST /api/debug/snapshot?dir=/some/folder`, which renders the 
 - **`Factory/`** is the `factory` command. It's embedded at `Contents/MacOS/factory`.
 - **`Shared/`** holds what the app and the command share: `ClaudeSetup.swift` installs the hooks, and `ProjectPath.swift` finds a folder's repository.
 - **`Phone/`** is the iPhone app and **`PhoneWidgets/`** its widgets. They share the Mac app's model and design files, and **`PhoneKit/`**: `CloudBoard.swift` (the board's records, also in the Mac app) and `BoardCache.swift` (the board the app leaves for its widgets). In the Simulator, a Debug build takes `-FactorySampleBoard <file>` (a JSON array of projects) and `-FactorySampleDigest <file>` (`GET /api/digest`) in place of iCloud, `-FactoryOpen <project id | today>` starts on that screen (iOS asks before following the app's own links), and `-FactoryWidgetGallery YES` draws every widget.
+- **`Tests/`**: the tests, with Swift Testing.
 - **`Config/`**: entitlements, and the TestFlight export options.
 - **`scripts/`**: `install.sh`; `testflight.sh`, which uploads the iPhone app; and `make-icon.swift`, which renders both apps' icons.
