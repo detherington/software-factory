@@ -54,6 +54,27 @@ nonisolated enum Formats {
             : date.formatted(.dateTime.month(.abbreviated).day().year())
     }
 
+    /// Hours as a bare number: "31", "4.5", "0.3".
+    static func hours(_ seconds: TimeInterval) -> String {
+        let hours = seconds / 3600
+        if hours >= 10 { return "\(Int(hours.rounded()))" }
+        let tenths = (hours * 10).rounded() / 10
+        return tenths == tenths.rounded() ? "\(Int(tenths))" : String(format: "%.1f", tenths)
+    }
+
+    /// "6.2 B", "480 M", "12 K".
+    static func tokens(_ count: Int) -> String {
+        func short(_ value: Double, _ unit: String) -> String {
+            value >= 100 ? "\(Int(value.rounded())) \(unit)" : String(format: "%.1f %@", value, unit).replacingOccurrences(of: ".0 ", with: " ")
+        }
+        switch count {
+        case 1_000_000_000...: return short(Double(count) / 1e9, "B")
+        case 1_000_000...: return short(Double(count) / 1e6, "M")
+        case 1_000...: return short(Double(count) / 1e3, "K")
+        default: return "\(count)"
+        }
+    }
+
     /// "42%".
     static func percent(_ fraction: Double) -> String {
         "\(Int((fraction * 100).rounded()))%"

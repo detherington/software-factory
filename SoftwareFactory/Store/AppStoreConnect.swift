@@ -36,17 +36,18 @@ nonisolated enum AppStoreConnect {
             guard let appID = app["id"] as? String,
                   let attributes = app["attributes"] as? [String: Any],
                   let bundleID = attributes["bundleId"] as? String else { continue }
-            async let builds = builds(of: appID, token: token)
+            async let builds = builds(of: appID, token: token, now: now)
             async let versions = versions(of: appID, token: token)
+            let (latest, uploads) = try await builds
             found[bundleID] = AppStoreStatus(appID: appID, name: attributes["name"] as? String ?? bundleID,
-                                             builds: try await builds, versions: try await versions, checked: now)
+                                             builds: latest, versions: try await versions, checked: now, uploads: uploads)
         }
         return found
     }
 
-    /// The latest builds, newest first: up to two per platform.
-    private static func builds(of appID: String, token: String) async throws -> [StoreBuild] {
-        let response = try await get("/v1/builds?filter[app]=\(appID)&sort=-uploadedDate&limit=12"
+    /// The latest builds, newest first: up to two per platform. And every upload in the last 90 days.
+    private static func builds(of appID: String, token: String, now: Date) async throws -> ([StoreBuild], [StoreUpload]) {
+        let response = try await get("/v1/builds?filter[app]=\(appID)&sort=-uploadedDate&limit=100"
             + "&fields[builds]=version,uploadedDate,processingState,expired,preReleaseVersion,buildBetaDetail"
             + "&include=preReleaseVersion,buildBetaDetail&fields[preReleaseVersions]=version,platform"
             + "&fields[buildBetaDetails]=internalBuildState", token: token)
@@ -56,12 +57,16 @@ nonisolated enum AppStoreConnect {
             return included.first { $0["type"] as? String == type && $0["id"] as? String == id }?["attributes"] as? [String: Any]
         }
         var perPlatform: [String: Int] = [:]
-        return (response["data"] as? [[String: Any]] ?? []).compactMap { build in
+        var uploads: [StoreUpload] = []
+        let latest = (response["data"] as? [[String: Any]] ?? []).compactMap { build -> StoreBuild? in
             guard let id = build["id"] as? String, let a = build["attributes"] as? [String: Any] else { return nil }
             let relationships = build["relationships"] as? [String: Any] ?? [:]
             let version = attributes("preReleaseVersions", relationships["preReleaseVersion"])
             let beta = attributes("buildBetaDetails", relationships["buildBetaDetail"])
             let platform = version?["platform"] as? String ?? "IOS"
+            if let uploaded = date(a["uploadedDate"]), now.timeIntervalSince(uploaded) < 90 * 86_400 {
+                uploads.append(StoreUpload(number: a["version"] as? String ?? "?", platform: platform, uploaded: uploaded))
+            }
             perPlatform[platform, default: 0] += 1
             guard perPlatform[platform]! <= 2 else { return nil }
             return StoreBuild(id: id, number: a["version"] as? String ?? "?", version: version?["version"] as? String ?? "?",
@@ -69,6 +74,7 @@ nonisolated enum AppStoreConnect {
                               processing: a["processingState"] as? String ?? "VALID", testing: beta?["internalBuildState"] as? String,
                               expired: a["expired"] as? Bool ?? false)
         }
+        return (latest, uploads)
     }
 
     /// Per platform, the newest App Store version, and the one on the App Store if that's an older one.

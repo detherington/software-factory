@@ -34,6 +34,43 @@ nonisolated enum SyncFolder {
 
     static var folder: URL { override ?? iCloudDrive.appending(path: "Software Factory/Boards", directoryHint: .isDirectory) }
 
+    /// Each Mac's Passport numbers: iCloud Drive/Software Factory/Stats/<machine id>.json, beside the boards.
+    static var statsFolder: URL { folder.deletingLastPathComponent().appending(path: "Stats", directoryHint: .isDirectory) }
+
+    static func write(_ share: PassportShare) throws {
+        try FileManager.default.createDirectory(at: statsFolder, withIntermediateDirectories: true)
+        try coordinatedWrite(encoder.encode(share), to: statsFolder.appending(path: "\(share.machineID).json"))
+    }
+
+    /// The other Macs' Passport numbers.
+    static func shares(excluding machineID: String) -> [PassportShare] {
+        guard let files = try? FileManager.default.contentsOfDirectory(at: statsFolder, includingPropertiesForKeys: nil) else { return [] }
+        return files.compactMap { file in
+            var name = file.lastPathComponent
+            if name.hasPrefix("."), name.hasSuffix(".icloud") {
+                name = String(name.dropFirst().dropLast(".icloud".count))
+                try? FileManager.default.startDownloadingUbiquitousItem(at: statsFolder.appending(path: name))
+                return nil
+            }
+            guard name.hasSuffix(".json"), name.dropLast(".json".count) != machineID else { return nil }
+            var share: PassportShare?
+            var coordination: NSError?
+            NSFileCoordinator().coordinate(readingItemAt: file, options: [], error: &coordination) { url in
+                share = (try? Data(contentsOf: url)).flatMap { try? decoder.decode(PassportShare.self, from: $0) }
+            }
+            return share
+        }
+    }
+
+    private static func coordinatedWrite(_ data: Data, to url: URL) throws {
+        var coordination: NSError?
+        var failure: Error?
+        NSFileCoordinator().coordinate(writingItemAt: url, options: .forReplacing, error: &coordination) { url in
+            do { try data.write(to: url, options: .atomic) } catch { failure = error }
+        }
+        if let error = coordination ?? failure { throw error }
+    }
+
     static func write(_ board: Board) throws {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let data = try encoder.encode(board)

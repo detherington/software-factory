@@ -121,6 +121,10 @@ enum API {
                 }
                 let project = store.applyClaudeHook(payload, machine: machine)
                 return .json(Data("{\"ok\":true,\"project\":\(project.map { "\"\($0.id)\"" } ?? "null")}".utf8))
+            case ("GET", "api/passport"):
+                // ?period=this-week (the default), last-week or month.
+                let period = PassportPeriod(rawValue: request.query["period"] ?? "") ?? .thisWeek
+                return try encode(PassportStore.shared.summary(period, now: .now))
             case ("GET", "api/factory"):
                 // The command-line tool, for `curl … -o ~/.local/bin/factory` on another Mac.
                 guard let data = try? Data(contentsOf: Bundle.main.bundleURL.appending(path: "Contents/MacOS/factory")) else {
@@ -136,6 +140,9 @@ enum API {
                 return .json(Data("{\"ok\":true}".utf8))
             case ("POST", "api/debug/check-app-store"):
                 Task { await AppStoreWatcher.shared.check() }
+                return .json(Data("{\"ok\":true}".utf8))
+            case ("POST", "api/debug/read-passport"):
+                Task { await PassportStore.shared.read() }
                 return .json(Data("{\"ok\":true}".utf8))
             case ("GET", "api/debug/notices"):
                 return try encode(Notifier.shared.recent)

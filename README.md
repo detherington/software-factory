@@ -17,6 +17,7 @@ A status board for every coding project on this Mac: what's being worked on, wha
   - **Quick capture:** "Add To-Do…" in any card's menu, the field in the menu bar panel, or `factory todo "…"` in Terminal. That includes Claude, when you ask it to note something.
   - **Sync:** the list syncs between Macs. The latest change to each item wins, and deletions are kept 30 days so they reach every Mac.
 - **Activity.** Every project's timeline, merged.
+- **Passport.** Your week in numbers (⌘3): the hours Claude worked, sessions, commits, TestFlight builds, releases and tokens. Each day is a bar, each project a row, and milestones get stamps: a release, a new project, the busiest day, the longest turn, days in a row. Switch between this week, last week and the last 30 days. See [Passport](#passport).
 - **Notifications.** It tells you when something changes instead of waiting for you to look. Each kind can be switched off in Settings › Notifications:
   - **Needs you, Your call, Blocked:** when a session enters one, with its message. These make a sound.
   - **Background work finished:** a background command or agent.
@@ -201,6 +202,23 @@ Settings › App Store Connect takes an App Store Connect API key: its key ID, i
 - **What it reports.** The first check only learns what's there. After that, a build ready to test goes in the timeline and notifies; a build needing export compliance goes in the timeline; a failed build or a rejection is a Blocked report; a version on the App Store is a Shipped report. A build or version on iOS and Mac at once is one piece of news.
 - **Other Macs.** Only one Mac needs the key: the status syncs with the rest of the board.
 
+## Passport
+
+The numbers come from what's already on this Mac:
+
+- **Hours, sessions and tokens:** from Claude Code's transcripts in `~/.claude/projects`, subagents' included.
+  - **Hours:** the time Claude spent on your turns, from your message to its last reply, taken from the timestamps of everything in between. Waiting for you doesn't count: not before your message, and not while a question or plan waits for your answer. No single step counts for more than 30 minutes, so a permission prompt left overnight isn't work. Sessions running at once each count, so a day can come to more than 24 hours.
+  - **Tokens:** every token each reply used, read from the cache included, which is most of them. Hover over the number for the split.
+- **Commits:** from each project's git history, on every branch.
+- **Builds:** TestFlight uploads, from [App Store Connect](#app-store-connect). A build number counts once, whatever its platforms.
+- **Shipped:** Shipped reports (`factory done`, or an app going live).
+
+How it reads:
+
+- **Fast after the first time.** The first read goes through every transcript, a few seconds per gigabyte. After that it reads only what's been added, every ten minutes and when the Passport opens.
+- **Kept for good.** Claude Code deletes transcripts after 30 days (`cleanupPeriodDays`), but what they added up to stays in `passport.json`. Comparisons with an earlier period appear once the record reaches back that far.
+- **Both Macs.** With Sync on, each Mac shares its numbers in `iCloud Drive/Software Factory/Stats/<this Mac's id>.json`, and the Passport adds up every Mac's. A repository cloned on both counts its commits once.
+
 ## The `factory` command
 
 ```bash
@@ -250,6 +268,7 @@ The API listens on `127.0.0.1:7720`, and only on this Mac unless Other Macs is o
 | DELETE | `/api/projects/{id}/todos/{todo}` | Deletes one |
 | POST | `/api/todos` | Adds one to the project a folder belongs to: `{"path": "…", "text": "…"}` (or `"project"`) |
 | POST | `/api/hooks/claude` | A Claude Code hook's input, unchanged |
+| GET | `/api/passport` | The Passport's numbers: `?period=this-week` (the default), `last-week` or `month` |
 | GET | `/api/factory` | The `factory` command, for setting up another Mac |
 
 ### Reports
@@ -295,7 +314,7 @@ The reply is the project as the board shows it: `state` and `label` ("Needs you"
 
 ## Data
 
-The board lives in `~/Library/Application Support/Software Factory/projects.json`. Each project keeps its last 200 events and up to 12 sessions. Sessions nobody has heard from in three days are dropped.
+The board lives in `~/Library/Application Support/Software Factory/projects.json`, and the Passport's record in `passport.json` beside it. Each project keeps its last 200 events and up to 12 sessions. Sessions nobody has heard from in three days are dropped.
 
 ## Development
 

@@ -9,6 +9,8 @@ struct AppStoreStatus: Codable, Hashable, Sendable {
     var builds: [StoreBuild]
     var versions: [StoreVersion]
     var checked: Date
+    /// Every build uploaded in the last three months, for the Passport.
+    var uploads: [StoreUpload]?
 
     /// The build that says most: the newest.
     var leadBuild: StoreBuild? { builds.first }
@@ -76,6 +78,13 @@ struct StoreBuild: Codable, Hashable, Sendable, Identifiable {
         case .expired, .other: nil
         }
     }
+}
+
+/// A build's upload: when, and for which platform.
+struct StoreUpload: Codable, Hashable, Sendable {
+    var number: String
+    var platform: String
+    var uploaded: Date
 }
 
 struct StoreVersion: Codable, Hashable, Sendable, Identifiable {

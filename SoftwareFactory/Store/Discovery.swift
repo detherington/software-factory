@@ -55,7 +55,7 @@ nonisolated enum Discovery {
     }
 
     /// The `cwd` a transcript records, from its first lines.
-    private static func workingDirectory(in transcript: URL) -> String? {
+    static func workingDirectory(in transcript: URL) -> String? {
         guard let handle = try? FileHandle(forReadingFrom: transcript) else { return nil }
         defer { try? handle.close() }
         guard let data = try? handle.read(upToCount: 256 * 1024) else { return nil }
@@ -196,7 +196,7 @@ nonisolated enum Discovery {
 
     // MARK: -
 
-    private static func run(_ tool: String, _ arguments: [String]) -> String? {
+    static func run(_ tool: String, _ arguments: [String]) -> String? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: tool)
         process.arguments = arguments

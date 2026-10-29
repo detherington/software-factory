@@ -13,6 +13,7 @@ struct RootView: View {
                 switch navigator.selection ?? .board {
                 case .board: BoardScreen()
                 case .activity: ActivityScreen()
+                case .passport: PassportScreen()
                 case .project(let id): ProjectScreen(id: id)
                 }
             }
@@ -33,6 +34,8 @@ private struct Sidebar: View {
                 .tag(SidebarItem.board)
             Label("Activity", systemImage: "waveform.path.ecg")
                 .tag(SidebarItem.activity)
+            Label("Passport", systemImage: "book.closed.fill")
+                .tag(SidebarItem.passport)
 
             let live = store.live
             if !live.isEmpty {

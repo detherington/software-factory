@@ -306,7 +306,7 @@ final class ProjectStore {
             if let task = report.task?.trimmed { p.task = task }
             if let note = report.note?.trimmed { p.note = note }
 
-            if let state, state != p.reported || p.task != oldTask {
+            if let state, state != p.reported || p.task != oldTask || state == .done {
                 // The words lead; the state is the line under them.
                 let note = report.note?.trimmed
                 let title = state == .working ? (p.task ?? note ?? state.label) : (note ?? state.label)
@@ -703,10 +703,16 @@ final class ProjectStore {
 
     /// Which project here another Mac's project is.
     private func key(for project: Project) -> String {
-        if local[project.id] != nil { return project.id }
-        if let repo = project.repo, let same = local.values.first(where: { $0.repo == repo }) { return same.id }
-        if let same = local.values.first(where: { $0.name.caseInsensitiveCompare(project.name) == .orderedSame }) { return same.id }
-        return project.id
+        projectID(matching: project.id, name: project.name, repo: project.repo)
+    }
+
+    /// The project here that another Mac's project is: the same id, repository or name. Its own id
+    /// when there's none, as on the merged board.
+    func projectID(matching id: String, name: String, repo: String?) -> String {
+        if local[id] != nil { return id }
+        if let repo, let same = local.values.first(where: { $0.repo == repo }) { return same.id }
+        if let same = local.values.first(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }) { return same.id }
+        return id
     }
 
     /// The Dock icon counts the projects waiting on you.
