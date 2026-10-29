@@ -226,15 +226,14 @@ struct ProjectCard: View {
                     .multilineTextAlignment(.leading)
                 let ends = project.openLooseEnds
                 let todos = project.openTodos.count
-                if !ends.isEmpty || todos > 0 {
-                    HStack(spacing: 6) {
+                // Wrapped, so a project with loose ends on several Macs doesn't push the card wide.
+                if !ends.isEmpty || todos > 0 || project.appStore != nil {
+                    FlowChips {
                         if todos > 0 { StatusChip(text: String(localized: "\(todos) to do"), symbol: "checklist") }
                         LooseEndsChips(ends: ends)
+                        if let status = project.appStore { AppStoreChips(status: status) }
                     }
                     .padding(.top, 2)
-                }
-                if let status = project.appStore {
-                    HStack(spacing: 6) { AppStoreChips(status: status) }
                 }
                 if !steps.isEmpty {
                     Strip.steps(steps, color: state == .idle ? Switchyard.textSecondary : state.swatch.color, track: Switchyard.surfaceRaised)

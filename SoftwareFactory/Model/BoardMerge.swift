@@ -79,8 +79,11 @@ nonisolated enum BoardMerge {
                 todos[todo.id] = todo
             }
             merged.todos = Array(todos.values)
-            // Each Mac's copy of the folder has its own, labeled with its Mac above.
-            merged.looseEnds = (merged.looseEnds ?? []) + (other.looseEnds ?? [])
+            // Each Mac's copy of the folder has its own, labeled with its Mac above: once each, and
+            // none another Mac has from this one.
+            let places = Set((merged.looseEnds ?? []).map(\.machine))
+            merged.looseEnds = (merged.looseEnds ?? [])
+                + (other.looseEnds ?? []).filter { $0.machine != thisMac && !places.contains($0.machine) }
             merged.lastActivity = max(merged.lastActivity, other.lastActivity)
         }
         merged.events.sort { $0.date > $1.date }
