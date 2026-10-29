@@ -3,8 +3,16 @@ import SwiftUI
 /// The menu bar icon: a raised hand and a count when something needs you, a bolt while work's under way.
 struct MenuBarLabel: View {
     @Environment(ProjectStore.self) private var store
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
+        label
+            // Always on screen, so it's how a notification opens the board window.
+            .onAppear { Navigator.shared.openBoard = { openWindow(id: "board") } }
+    }
+
+    @ViewBuilder
+    private var label: some View {
         let waiting = store.count(.waiting)
         let yourCall = store.count(.yourCall)
         let working = store.count(.working)

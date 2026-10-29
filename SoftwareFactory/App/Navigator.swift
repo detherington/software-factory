@@ -15,6 +15,9 @@ final class Navigator {
     var selection: SidebarItem? = .board
     /// A project whose To do card should take the keyboard when it next appears.
     var todoFocus: String?
+    /// Opens the board window, from outside SwiftUI (a notification). The menu bar icon, which is
+    /// always there, provides it.
+    @ObservationIgnored var openBoard: (() -> Void)?
 
     func open(_ id: String) {
         selection = .project(id)

@@ -316,7 +316,8 @@ final class ProjectStore {
                 p.log(Event(date: now, symbol: "text.bubble.fill", title: note))
             }
             if let state {
-                if state != p.reported { p.reportedAt = now }
+                // Each release is news, even after the last one.
+                if state != p.reported || state == .done { p.reportedAt = now }
                 p.reported = state
             }
 
@@ -696,6 +697,7 @@ final class ProjectStore {
             merged[id] = BoardMerge.combine(local[id], theirs[id] ?? [], thisMac: machineName)
         }
         projects = merged
+        Notifier.shared.evaluate(merged, now: .now)
     }
 
     /// Which project here another Mac's project is.

@@ -55,6 +55,7 @@ struct SettingsView: View {
                 Text("The hooks go in ~/.claude/settings.json and report every session's state: working, waiting for you, finished. The CLAUDE.md section asks Claude to report milestones, steps and blockers too. A backup of your settings is kept beside them.")
             }
 
+            NotificationsSection()
             UpdatesSection()
             SyncSection()
             OtherMacsSection(message: $message)
@@ -129,6 +130,37 @@ struct SettingsView: View {
         }
         hooksInstalled = ClaudeSetup.isInstalled()
         toolLinked = CommandLineTool.isLinked
+    }
+}
+
+/// What notifies, and whether macOS lets it.
+private struct NotificationsSection: View {
+    @Environment(Notifier.self) private var notifier
+
+    var body: some View {
+        @Bindable var notifier = notifier
+        Section {
+            if notifier.authorization == .denied {
+                LabeledContent("Notifications") {
+                    HStack {
+                        Text("Off for Software Factory").foregroundStyle(Swatch.ember.color)
+                        Button("Open System Settings") {
+                            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension")!)
+                        }
+                    }
+                }
+            }
+            ForEach(Notifier.Kind.allCases) { kind in
+                Toggle(kind.label, isOn: Binding(get: { notifier.isEnabled(kind) }, set: { notifier.setEnabled(kind, $0) }))
+            }
+            Toggle("Sessions on other Macs", isOn: $notifier.includesOtherMacs)
+            Toggle("Play a sound when something needs you", isOn: $notifier.playsSound)
+        } header: {
+            Text("Notifications")
+        } footer: {
+            Text("Each notifies once, when it happens. Click one to open the session's chat in Claude Desktop, or the board. Several at once arrive as one, and a \"needs you\" leaves Notification Center once it's answered.")
+        }
+        .task { await notifier.refreshAuthorization() }
     }
 }
 

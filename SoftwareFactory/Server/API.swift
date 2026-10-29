@@ -134,6 +134,8 @@ enum API {
             case ("POST", "api/debug/update"):
                 Updater.shared.update()
                 return .json(Data("{\"ok\":true}".utf8))
+            case ("GET", "api/debug/notices"):
+                return try encode(Notifier.shared.recent)
             case ("POST", "api/debug/snapshot"):
                 let directory = request.query["dir"] ?? NSTemporaryDirectory()
                 let written = Snapshot.write(to: URL(fileURLWithPath: directory), store: store)

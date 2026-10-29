@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UserNotifications
 
 @main
 struct SoftwareFactoryApp: App {
@@ -36,6 +37,7 @@ extension View {
         environment(ProjectStore.shared)
             .environment(Navigator.shared)
             .environment(Updater.shared)
+            .environment(Notifier.shared)
             .tint(Switchyard.accent)
             .preferredColorScheme(.dark)
     }
@@ -63,6 +65,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         store.startSync()
         ServerController.shared.start(store: store)
         Updater.shared.startChecking()
+        Notifier.shared.start(delegate: self)
         // A new version may listen to more hook events: bring the hooks this app installed up to date.
         _ = try? ClaudeSetup.upgradeIfNeeded()
         // Look for projects now and every few minutes: new folders, commits, READMEs.
@@ -80,6 +83,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         ProjectStore.shared.saveNow()
         ProjectStore.shared.writeSyncNow()
+    }
+}
+
+extension AppDelegate: UNUserNotificationCenterDelegate {
+    /// Shown even while the app is in front: the board window may not be.
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async
+        -> UNNotificationPresentationOptions {
+        [.banner, .list, .sound]
+    }
+
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+        let info = response.notification.request.content.userInfo
+        let project = info["project"] as? String ?? ""
+        let session = info["session"] as? String ?? ""
+        let action = response.actionIdentifier
+        await MainActor.run { Notifier.shared.respond(action: action, project: project, session: session) }
     }
 }
 
