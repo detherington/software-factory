@@ -103,8 +103,8 @@ final class PassportStore {
             let share = makeShare(store, since: since)
             let machineID = store.machineID
             shares = await Task.detached(priority: .utility) {
-                try? SyncFolder.write(share)
-                return SyncFolder.shares(excluding: machineID)
+                try? SyncFolder.writeShared(share, in: "Stats", machineID: machineID)
+                return SyncFolder.readShared(PassportShare.self, in: "Stats", excluding: machineID)
             }.value
         } else {
             shares = []

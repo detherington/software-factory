@@ -58,6 +58,7 @@ struct ProjectContent: View {
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 380), spacing: 14, alignment: .top)], alignment: .leading, spacing: 14) {
                 TodoCard(project: project)
+                PromptsCard(project: project)
                 if let status = project.appStore {
                     AppStoreCard(status: status, now: now)
                 }

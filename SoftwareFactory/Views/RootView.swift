@@ -165,10 +165,19 @@ struct SyncStatusLine: View {
 struct ProjectMenuItems: View {
     let project: Project
     @Environment(ProjectStore.self) private var store
+    @Environment(PromptStore.self) private var prompts
 
     var body: some View {
         if let chat = store.bestChat(for: project) {
             Button("Open Chat in Claude", systemImage: "bubble.left.and.text.bubble.right") { Reveal.chat(chat) }
+        }
+        let (own, everywhere) = prompts.prompts(for: project)
+        if project.isOnThisMac, !(own + everywhere).isEmpty {
+            Menu("Start Prompt", systemImage: "text.bubble") {
+                ForEach(own) { prompt in Button(prompt.title) { prompts.start(prompt, in: project) } }
+                if !own.isEmpty, !everywhere.isEmpty { Divider() }
+                ForEach(everywhere) { prompt in Button(prompt.title) { prompts.start(prompt, in: project) } }
+            }
         }
         Button("Add To-Do…", systemImage: "checklist") {
             Navigator.shared.open(project.id)

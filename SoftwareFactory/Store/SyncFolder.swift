@@ -34,41 +34,45 @@ nonisolated enum SyncFolder {
 
     static var folder: URL { override ?? iCloudDrive.appending(path: "Software Factory/Boards", directoryHint: .isDirectory) }
 
-    /// Each Mac's Passport numbers: iCloud Drive/Software Factory/Stats/<machine id>.json, beside the boards.
-    static var statsFolder: URL { folder.deletingLastPathComponent().appending(path: "Stats", directoryHint: .isDirectory) }
-
-    static func write(_ share: PassportShare) throws {
-        try FileManager.default.createDirectory(at: statsFolder, withIntermediateDirectories: true)
-        try coordinatedWrite(encoder.encode(share), to: statsFolder.appending(path: "\(share.machineID).json"))
+    /// A folder beside the boards where each Mac keeps one file of its own, named by its id:
+    /// "Stats" for the Passport's numbers, "Prompts" for saved prompts.
+    static func sharedFolder(_ name: String) -> URL {
+        folder.deletingLastPathComponent().appending(path: name, directoryHint: .isDirectory)
     }
 
-    /// The other Macs' Passport numbers.
-    static func shares(excluding machineID: String) -> [PassportShare] {
-        guard let files = try? FileManager.default.contentsOfDirectory(at: statsFolder, includingPropertiesForKeys: nil) else { return [] }
-        return files.compactMap { file in
-            var name = file.lastPathComponent
-            if name.hasPrefix("."), name.hasSuffix(".icloud") {
-                name = String(name.dropFirst().dropLast(".icloud".count))
-                try? FileManager.default.startDownloadingUbiquitousItem(at: statsFolder.appending(path: name))
-                return nil
-            }
-            guard name.hasSuffix(".json"), name.dropLast(".json".count) != machineID else { return nil }
-            var share: PassportShare?
-            var coordination: NSError?
-            NSFileCoordinator().coordinate(readingItemAt: file, options: [], error: &coordination) { url in
-                share = (try? Data(contentsOf: url)).flatMap { try? decoder.decode(PassportShare.self, from: $0) }
-            }
-            return share
-        }
-    }
-
-    private static func coordinatedWrite(_ data: Data, to url: URL) throws {
+    static func writeShared<T: Encodable>(_ value: T, in name: String, machineID: String) throws {
+        let directory = sharedFolder(name)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let data = try encoder.encode(value)
+        let url = directory.appending(path: "\(machineID).json")
         var coordination: NSError?
         var failure: Error?
         NSFileCoordinator().coordinate(writingItemAt: url, options: .forReplacing, error: &coordination) { url in
             do { try data.write(to: url, options: .atomic) } catch { failure = error }
         }
         if let error = coordination ?? failure { throw error }
+    }
+
+    /// The other Macs' files in a shared folder. iCloud Drive is asked to download any it has only a
+    /// placeholder for; they're read next time.
+    static func readShared<T: Decodable>(_ type: T.Type, in name: String, excluding machineID: String) -> [T] {
+        let directory = sharedFolder(name)
+        guard let files = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) else { return [] }
+        return files.compactMap { file in
+            var name = file.lastPathComponent
+            if name.hasPrefix("."), name.hasSuffix(".icloud") {
+                name = String(name.dropFirst().dropLast(".icloud".count))
+                try? FileManager.default.startDownloadingUbiquitousItem(at: directory.appending(path: name))
+                return nil
+            }
+            guard name.hasSuffix(".json"), name.dropLast(".json".count) != machineID else { return nil }
+            var value: T?
+            var coordination: NSError?
+            NSFileCoordinator().coordinate(readingItemAt: file, options: [], error: &coordination) { url in
+                value = (try? Data(contentsOf: url)).flatMap { try? decoder.decode(T.self, from: $0) }
+            }
+            return value
+        }
     }
 
     static func write(_ board: Board) throws {

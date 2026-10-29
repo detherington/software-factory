@@ -6,7 +6,7 @@ import SwiftUI
 /// from the shell, where screen capture isn't allowed. Glass controls don't render in snapshots.
 @MainActor
 enum Snapshot {
-    static func write(to directory: URL, store: ProjectStore) -> [String] {
+    static func write(to directory: URL, store: ProjectStore, also: [String] = []) -> [String] {
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         var written: [String] = []
 
@@ -15,6 +15,7 @@ enum Snapshot {
                 .environment(store)
                 .environment(Navigator.shared)
                 .environment(PassportStore.shared)
+                .environment(PromptStore.shared)
                 .environment(\.colorScheme, .dark)
                 .tint(Switchyard.accent)
                 .frame(width: width)
@@ -29,7 +30,7 @@ enum Snapshot {
         }
 
         render(BoardContent().padding(28), width: 1240, name: "board.png")
-        for project in store.board.prefix(3) {
+        for project in store.board.prefix(3) + also.compactMap({ store[$0] }) {
             render(ProjectContent(project: project, timelineLimit: 8).padding(28), width: 1100, name: "project-\(project.id).png")
         }
         render(ActivityContent(limit: 24).padding(28), width: 1000, name: "activity.png")

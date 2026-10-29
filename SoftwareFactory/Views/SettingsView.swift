@@ -6,6 +6,7 @@ struct SettingsView: View {
     @State private var hooksInstalled = ClaudeSetup.isInstalled()
     @State private var toolLinked = CommandLineTool.isLinked
     @State private var opensAtLogin = SMAppService.mainApp.status == .enabled
+    @State private var paletteHotKey = PaletteController.usesHotKey
     @State private var portText = String(ServerController.configuredPort)
     @State private var message: String?
 
@@ -79,7 +80,7 @@ struct SettingsView: View {
                 Text("Links the factory command into ~/.local/bin. Run factory help to see what it does.")
             }
 
-            Section("General") {
+            Section {
                 Toggle("Open at login", isOn: $opensAtLogin)
                     .onChange(of: opensAtLogin) { _, on in
                         do {
@@ -88,9 +89,15 @@ struct SettingsView: View {
                             message = error.localizedDescription
                         }
                     }
+                Toggle("Open the palette from any app with ⌥⌘K", isOn: $paletteHotKey)
+                    .onChange(of: paletteHotKey) { _, on in PaletteController.usesHotKey = on }
                 LabeledContent("Board") {
                     Button("Show in Finder") { NSWorkspace.shared.open(store.dataDirectory) }
                 }
+            } header: {
+                Text("General")
+            } footer: {
+                Text("⌘K opens the palette in the board window. Type a project's code, then a prompt, a to-do or a new chat.")
             }
 
             if !store.hiddenProjects.isEmpty {

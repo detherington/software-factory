@@ -121,6 +121,20 @@ enum API {
                 }
                 let project = store.applyClaudeHook(payload, machine: machine)
                 return .json(Data("{\"ok\":true,\"project\":\(project.map { "\"\($0.id)\"" } ?? "null")}".utf8))
+            case ("GET", "api/prompts"):
+                // Saved prompts: those for every project, and each project's own.
+                return try encode(PromptStore.shared.all.filter { !$0.deleted })
+            case ("POST", "api/prompts"):
+                // {"title": "…", "text": "…", "project": "<id, name or code>"}; no project means every project.
+                let input = try decode(PromptInput.self, from: request.body)
+                guard let title = input.title.trimmed, let text = input.text.trimmed else { return .error(400, "A prompt needs a title and text.") }
+                var project: Project?
+                if let key = input.project {
+                    guard let found = store.find(key) else { return .error(404, "No project called \(key).") }
+                    project = found
+                }
+                PromptStore.shared.add(title: title, text: text, project: project)
+                return .json(Data("{\"ok\":true}".utf8))
             case ("GET", "api/passport"):
                 // ?period=this-week (the default), last-week or month.
                 let period = PassportPeriod(rawValue: request.query["period"] ?? "") ?? .thisWeek
@@ -141,6 +155,17 @@ enum API {
             case ("POST", "api/debug/check-app-store"):
                 Task { await AppStoreWatcher.shared.check() }
                 return .json(Data("{\"ok\":true}".utf8))
+            case ("POST", "api/debug/palette"):
+                // The keys to type are the body. What the palette then shows goes to ?out=<dir>, as
+                // palette.json and palette.png.
+                let script = String(decoding: request.body, as: UTF8.self)
+                let out = URL(fileURLWithPath: request.query["out"] ?? NSTemporaryDirectory())
+                Task {
+                    let state = await PaletteController.shared.debugType(script, image: out.appending(path: "palette.png"))
+                    let data = try? JSONSerialization.data(withJSONObject: state, options: [.prettyPrinted, .sortedKeys])
+                    try? data?.write(to: out.appending(path: "palette.json"))
+                }
+                return .json(Data("{\"ok\":true}".utf8))
             case ("POST", "api/debug/read-passport"):
                 Task { await PassportStore.shared.read() }
                 return .json(Data("{\"ok\":true}".utf8))
@@ -148,10 +173,11 @@ enum API {
                 return try encode(Notifier.shared.recent)
             case ("POST", "api/debug/snapshot"):
                 let directory = request.query["dir"] ?? NSTemporaryDirectory()
-                let written = Snapshot.write(to: URL(fileURLWithPath: directory), store: store)
+                let also = request.query["project"].map { [$0] } ?? []
+                let written = Snapshot.write(to: URL(fileURLWithPath: directory), store: store, also: also)
                 return .json(try JSONSerialization.data(withJSONObject: ["written": written], options: .prettyPrinted))
             #endif
-            case (_, "api/projects/*"), (_, "api/projects"), (_, "api/project"), (_, "api/report"), (_, "api/hooks/claude"),
+            case (_, "api/projects/*"), (_, "api/projects"), (_, "api/prompts"), (_, "api/project"), (_, "api/report"), (_, "api/hooks/claude"),
                  (_, "api/projects/*/todos"), (_, "api/projects/*/todos/*"), (_, "api/todos"):
                 return .error(405, "\(request.method) isn't supported here.")
             default:
@@ -355,4 +381,11 @@ struct ProjectDTO: Encodable {
         chat = ProjectStore.shared.bestChat(for: p).flatMap { chat in chat.url.map { Chat(title: chat.title, url: $0.absoluteString) } }
         events = limit > 0 ? Array(p.events.prefix(limit)) : nil
     }
+}
+
+/// A saved prompt to add.
+private struct PromptInput: Decodable {
+    var title: String
+    var text: String
+    var project: String?
 }

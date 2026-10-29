@@ -16,6 +16,12 @@ A status board for every coding project on this Mac: what's being worked on, wha
   - **Board:** cards show "3 to do", and the sidebar shows the count.
   - **Quick capture:** "Add To-Do…" in any card's menu, the field in the menu bar panel, or `factory todo "…"` in Terminal. That includes Claude, when you ask it to note something.
   - **Sync:** the list syncs between Macs. The latest change to each item wins, and deletions are kept 30 days so they reach every Mac.
+- **Saved prompts.** Prompts you send often, like "Ship a build to TestFlight", each a click from a new Claude Desktop chat in the project's folder with the prompt typed in (not sent).
+  - **Project page:** a Prompts card lists the project's own prompts, then those for every project. Click one to start it; **+** adds one; hover to edit.
+  - **Menus:** card and sidebar menus have "Start Prompt".
+  - **To start with:** three prompts for every project (Commit and push, Tidy loose ends, What's next?). Change or delete them as you like.
+  - **Sync:** prompts sync between Macs. The latest change to each wins.
+- **The palette.** ⌘K in the board window, or ⌥⌘K from any app (Settings › General turns that off). Type a project's code or name, then Tab or a space for what you can do there: open it, open its chat, show it in Finder or Terminal, or start one of its prompts. Keep typing to narrow the prompts. Words that match nothing become a to-do or a new chat: `emn todo fix the page turn` adds a to-do to Emanata, and `emn why does the reader stutter?` starts a chat with that question typed in.
 - **Activity.** Every project's timeline, merged.
 - **Passport.** Your week in numbers (⌘3): the hours Claude worked, sessions, commits, TestFlight builds, releases and tokens. Each day is a bar, each project a row, and milestones get stamps: a release, a new project, the busiest day, the longest turn, days in a row. Switch between this week, last week and the last 30 days. See [Passport](#passport).
 - **Notifications.** It tells you when something changes instead of waiting for you to look. Each kind can be switched off in Settings › Notifications:
@@ -155,7 +161,7 @@ Each Mac can run its own board, and they share through iCloud Drive:
 
 How it works:
 
-- **Files.** Each board writes its own Mac's projects to `iCloud Drive/Software Factory/Boards/<this Mac's id>.json`, at most every five seconds, and reads the other Macs' files every five seconds. A Mac only ever writes its own file, so the two never conflict. No Apple Developer account or iCloud entitlement is involved: iCloud Drive is just a folder to the app.
+- **Files.** Each board writes its own Mac's projects to `iCloud Drive/Software Factory/Boards/<this Mac's id>.json`, at most every five seconds, and reads the other Macs' files every five seconds. A Mac only ever writes its own file, so the two never conflict. Saved prompts (`Prompts/`) and the Passport's numbers (`Stats/`) are shared the same way, in folders beside `Boards/`. No Apple Developer account or iCloud entitlement is involved: iCloud Drive is just a folder to the app.
 - **Merging.**
   - A project on several Macs (same id, repository or name) is one card, and each session and timeline entry carries its Mac's name.
   - For what was reported (state, task, note, milestone, progress, steps, version), the newest report wins, wherever it was made.
@@ -268,6 +274,8 @@ The API listens on `127.0.0.1:7720`, and only on this Mac unless Other Macs is o
 | DELETE | `/api/projects/{id}/todos/{todo}` | Deletes one |
 | POST | `/api/todos` | Adds one to the project a folder belongs to: `{"path": "…", "text": "…"}` (or `"project"`) |
 | POST | `/api/hooks/claude` | A Claude Code hook's input, unchanged |
+| GET | `/api/prompts` | Saved prompts: `project` is a project's id, or missing for every project |
+| POST | `/api/prompts` | Saves one: `{"title": "…", "text": "…", "project": "…"}`, without `project` for every project |
 | GET | `/api/passport` | The Passport's numbers: `?period=this-week` (the default), `last-week` or `month` |
 | GET | `/api/factory` | The `factory` command, for setting up another Mac |
 
@@ -314,7 +322,7 @@ The reply is the project as the board shows it: `state` and `label` ("Needs you"
 
 ## Data
 
-The board lives in `~/Library/Application Support/Software Factory/projects.json`, and the Passport's record in `passport.json` beside it. Each project keeps its last 200 events and up to 12 sessions. Sessions nobody has heard from in three days are dropped.
+The board lives in `~/Library/Application Support/Software Factory/projects.json`, the Passport's record in `passport.json` and saved prompts in `prompts.json` beside it. Each project keeps its last 200 events and up to 12 sessions. Sessions nobody has heard from in three days are dropped.
 
 ## Development
 

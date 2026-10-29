@@ -40,6 +40,7 @@ extension View {
             .environment(Notifier.shared)
             .environment(AppStoreWatcher.shared)
             .environment(PassportStore.shared)
+            .environment(PromptStore.shared)
             .tint(Switchyard.accent)
             .preferredColorScheme(.dark)
     }
@@ -70,6 +71,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Notifier.shared.start(delegate: self)
         AppStoreWatcher.shared.start()
         PassportStore.shared.start()
+        PromptStore.shared.start()
+        PaletteController.shared.updateHotKey()
         // A new version may listen to more hook events: bring the hooks this app installed up to date.
         _ = try? ClaudeSetup.upgradeIfNeeded()
         // Look for projects now and every few minutes: new folders, commits, READMEs.
@@ -115,6 +118,9 @@ struct FactoryCommands: Commands {
                 .keyboardShortcut("2", modifiers: .command)
             Button("Passport") { Navigator.shared.selection = .passport }
                 .keyboardShortcut("3", modifiers: .command)
+            Divider()
+            Button("Open Palette…") { PaletteController.shared.show() }
+                .keyboardShortcut("k", modifiers: .command)
             Divider()
             Button("Look for Projects") { ProjectStore.shared.discover() }
                 .keyboardShortcut("r", modifiers: .command)
