@@ -129,7 +129,7 @@ private struct FirstRead: View {
 }
 
 /// Giant numerals over tracked labels, as on the board.
-private struct PassportStats: View {
+struct PassportStats: View {
     let summary: PassportSummary
 
     var body: some View {
@@ -235,7 +235,7 @@ private struct DayStrip: View {
 }
 
 /// Each project's share of the period, busiest first.
-private struct ProjectTable: View {
+struct ProjectTable: View {
     let rows: [PassportSummary.Row]
     @Environment(ProjectStore.self) private var store
     @Environment(Navigator.self) private var navigator

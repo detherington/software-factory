@@ -59,6 +59,13 @@ final class PassportStore {
                                     firstCommits: firstCommits, codes: codes, recordedSince: recordedSince)
     }
 
+    /// Any run of days, for the digest.
+    func summary(of dates: [Date], now: Date) -> PassportSummary {
+        let store = ProjectStore.shared
+        return PassportSummary.make(dates: dates, previous: [], now: now, days: days, releases: ledger.releases, builds: ledger.builds,
+                                    firstCommits: firstCommits, codes: store.projects.mapValues(\.code), recordedSince: recordedSince)
+    }
+
     /// From when the record is whole: the first read, less the days Claude Code keeps transcripts
     /// (`cleanupPeriodDays` in ~/.claude/settings.json, 30 by default).
     var recordedSince: Date {

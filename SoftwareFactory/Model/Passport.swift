@@ -149,11 +149,17 @@ struct PassportSummary: Encodable, Sendable {
 
     static func make(_ period: PassportPeriod, now: Date, days projectDays: [ProjectDay], releases: [Release],
                      builds: [BuildMark], firstCommits: [String: Date], codes: [String: String], recordedSince: Date) -> PassportSummary {
+        make(dates: period.days(at: now), previous: period.previousDays(at: now), now: now, days: projectDays, releases: releases,
+             builds: builds, firstCommits: firstCommits, codes: codes, recordedSince: recordedSince)
+    }
+
+    /// Any run of days (the digest's), compared with `previous` when there are any.
+    static func make(dates: [Date], previous previousDates: [Date], now: Date, days projectDays: [ProjectDay], releases: [Release],
+                     builds: [BuildMark], firstCommits: [String: Date], codes: [String: String], recordedSince: Date) -> PassportSummary {
         var keys = DayKeys()
-        let dates = period.days(at: now)
         let dayKeys = dates.map { keys.key(for: $0) }
         let inPeriod = Set(dayKeys)
-        let previous = Set(period.previousDays(at: now).map { keys.key(for: $0) })
+        let previous = Set(previousDates.map { keys.key(for: $0) })
         let today = keys.key(for: now)
 
         let current = projectDays.filter { inPeriod.contains($0.day) }

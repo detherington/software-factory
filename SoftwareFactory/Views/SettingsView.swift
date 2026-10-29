@@ -57,6 +57,7 @@ struct SettingsView: View {
             }
 
             NotificationsSection()
+            DigestSection()
             AppStoreSection()
             UpdatesSection()
             SyncSection()
@@ -228,12 +229,36 @@ private struct NotificationsSection: View {
             }
             Toggle("Sessions on other Macs", isOn: $notifier.includesOtherMacs)
             Toggle("Play a sound when something needs you", isOn: $notifier.playsSound)
+            Toggle("Remind me once if something waits on me for an hour", isOn: $notifier.remindsAfterAnHour)
         } header: {
             Text("Notifications")
         } footer: {
             Text("Each notifies once, when it happens. Click one to open the session's chat in Claude Desktop, or the board. Several at once arrive as one, and a \"needs you\" leaves Notification Center once it's answered.")
         }
         .task { await notifier.refreshAuthorization() }
+    }
+}
+
+/// The morning digest: whether, when, and which days.
+private struct DigestSection: View {
+    @Environment(DigestStore.self) private var digests
+
+    var body: some View {
+        @Bindable var digests = digests
+        Section {
+            Toggle("Send a morning digest", isOn: $digests.isOn)
+            DatePicker("Time", selection: $digests.time, displayedComponents: .hourAndMinute)
+                .disabled(!digests.isOn)
+            Picker("Days", selection: $digests.weekdaysOnly) {
+                Text("Every day").tag(false)
+                Text("Weekdays").tag(true)
+            }
+            .disabled(!digests.isOn)
+        } header: {
+            Text("Morning Digest")
+        } footer: {
+            Text("One notification with the day before in numbers, what's waiting on you, loose ends and old to-dos. It comes the first time you use a Mac after this time, and only one of your Macs sends it. Click it for the Today screen.")
+        }
     }
 }
 

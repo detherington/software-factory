@@ -31,6 +31,8 @@ struct SavedPrompt: Codable, Hashable, Sendable, Identifiable {
 @Observable
 final class PromptStore {
     static let shared = PromptStore()
+    /// The starter that asks Claude about a folder's loose ends, which the Today screen offers.
+    static let tidyLooseEnds = UUID(uuidString: "5F0C1E2A-0000-4000-8000-000000000002")!
 
     private(set) var all: [SavedPrompt] = []
     @ObservationIgnored private var loop: Task<Void, Never>?

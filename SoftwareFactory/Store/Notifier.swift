@@ -54,6 +54,8 @@ final class Notifier {
         var body: String
         var project: String
         var session: String?
+        /// The screen a click opens, when it isn't a project's: "today".
+        var screen: String?
     }
 
     private(set) var authorization: UNAuthorizationStatus = .notDetermined
@@ -68,6 +70,8 @@ final class Notifier {
     /// Held for a moment, so a burst arriving as separate changes still goes out as one.
     @ObservationIgnored private var queue: [(notice: Notice, standing: Bool, sound: Bool)] = []
     @ObservationIgnored private var flush: Task<Void, Never>?
+    /// When `remind` last looked: it reminds of hour marks passed since.
+    @ObservationIgnored private var lastReminderCheck: Date?
 
     /// `-FactoryNotificationsDryRun YES`: decide, record, but post nothing (for testing).
     private let dryRun = UserDefaults.standard.bool(forKey: "FactoryNotificationsDryRun")
@@ -92,6 +96,12 @@ final class Notifier {
     var playsSound: Bool {
         get { _ = settingsChanged; return UserDefaults.standard.object(forKey: "FactoryNotifySound") as? Bool ?? true }
         set { UserDefaults.standard.set(newValue, forKey: "FactoryNotifySound"); settingsChanged += 1 }
+    }
+
+    /// A second notice when something has waited on you for an hour. Off unless you want it.
+    var remindsAfterAnHour: Bool {
+        get { _ = settingsChanged; return UserDefaults.standard.bool(forKey: "FactoryNotifyReminder") }
+        set { UserDefaults.standard.set(newValue, forKey: "FactoryNotifyReminder"); settingsChanged += 1 }
     }
 
     /// Bumped when a setting changes, so views reading them refresh.
@@ -210,6 +220,34 @@ final class Notifier {
         }
     }
 
+    /// Reminds you, once, of what has been waiting on you for an hour: the session's notice comes
+    /// back to the top of Notification Center, with a sound. Called every minute.
+    func remind(_ projects: [String: Project], now: Date) {
+        // Only hour marks passed since the last look, so opening the app doesn't remind you of old news.
+        let last = lastReminderCheck ?? now
+        lastReminderCheck = now
+        guard started, remindsAfterAnHour else { return }
+        for project in projects.values where !project.hidden {
+            for session in project.liveSessions(at: now) where session.state.needsYou && (session.machine == nil || includesOtherMacs) {
+                let mark = session.since.addingTimeInterval(3600)
+                guard mark > last, mark <= now, let kind = Kind(session.state), isEnabled(kind) else { continue }
+                let key = "\(session.id)|\(session.state.rawValue)|\(Int(session.since.timeIntervalSince1970))"
+                guard seen.insert("remind|" + key).inserted else { continue }
+                var notice = notice(kind, key: key, project: project, session: session, place: session.machine.map { String(localized: "on \($0)") })
+                notice.title = kind == .yourCall
+                    ? String(localized: "\(project.name): still your call")
+                    : String(localized: "\(project.name) is still waiting on you")
+                notice.kind = "reminder"
+                deliver(notice, standing: true, sound: true)
+            }
+        }
+    }
+
+    /// Sends a notice that isn't about a change on the board: the morning digest.
+    func post(_ notice: Notice, sound: Bool) {
+        deliver(notice, standing: false, sound: sound)
+    }
+
     /// Sends what's queued: one by one, or a burst (a board catching up, several sessions at once) as one.
     private func send() {
         let notices = queue
@@ -230,7 +268,7 @@ final class Notifier {
         let name = project.name
         let (title, body): (String, String) = switch kind {
         case .needsYou: (String(localized: "\(name) needs you"), session?.message ?? session?.task ?? "")
-        case .yourCall: (String(localized: "\(name): your call"), session?.message ?? "")
+        case .yourCall: (String(localized: "\(name): your call"), session?.message ?? session?.ask ?? "")
         case .blocked: (String(localized: "\(name) is blocked"), session?.message ?? project.note ?? "")
         case .backgroundDone: (String(localized: "\(name): background work finished"), "")
         case .shipped: (String(localized: "\(name) shipped"), project.note ?? project.task ?? "")
@@ -254,8 +292,8 @@ final class Notifier {
         content.body = notice.body
         // Grouped by project in Notification Center.
         content.threadIdentifier = notice.project.isEmpty ? "summary" : notice.project
-        content.categoryIdentifier = notice.session == nil ? "project" : "session"
-        content.userInfo = ["project": notice.project, "session": notice.session ?? ""]
+        content.categoryIdentifier = notice.screen != nil ? "screen" : notice.session == nil ? "project" : "session"
+        content.userInfo = ["project": notice.project, "session": notice.session ?? "", "screen": notice.screen ?? ""]
         if sound, playsSound { content.sound = .default }
         UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: notice.key, content: content, trigger: nil))
     }
@@ -263,8 +301,14 @@ final class Notifier {
     // MARK: - Answering
 
     /// A click, or a button: the session's Claude Desktop chat when it has one, else the board.
-    func respond(action: String, project id: String, session sessionID: String) {
+    func respond(action: String, project id: String, session sessionID: String, screen: String) {
         let store = ProjectStore.shared
+        if screen == "today" {
+            Navigator.shared.selection = .today
+            Navigator.shared.openBoard?()
+            NSApplication.shared.activate()
+            return
+        }
         let session = store[id]?.sessions.first { $0.id == sessionID }
         if action != "show-board", let session, let chat = store.chat(for: session) {
             Reveal.chat(chat)

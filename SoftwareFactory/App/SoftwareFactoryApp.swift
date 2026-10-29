@@ -41,6 +41,7 @@ extension View {
             .environment(AppStoreWatcher.shared)
             .environment(PassportStore.shared)
             .environment(PromptStore.shared)
+            .environment(DigestStore.shared)
             .tint(Switchyard.accent)
             .preferredColorScheme(.dark)
     }
@@ -72,6 +73,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppStoreWatcher.shared.start()
         PassportStore.shared.start()
         PromptStore.shared.start()
+        DigestStore.shared.start()
         PaletteController.shared.updateHotKey()
         // A new version may listen to more hook events: bring the hooks this app installed up to date.
         _ = try? ClaudeSetup.upgradeIfNeeded()
@@ -104,8 +106,9 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         let info = response.notification.request.content.userInfo
         let project = info["project"] as? String ?? ""
         let session = info["session"] as? String ?? ""
+        let screen = info["screen"] as? String ?? ""
         let action = response.actionIdentifier
-        await MainActor.run { Notifier.shared.respond(action: action, project: project, session: session) }
+        await MainActor.run { Notifier.shared.respond(action: action, project: project, session: session, screen: screen) }
     }
 }
 
@@ -114,10 +117,12 @@ struct FactoryCommands: Commands {
         CommandGroup(after: .sidebar) {
             Button("Board") { Navigator.shared.selection = .board }
                 .keyboardShortcut("1", modifiers: .command)
-            Button("Activity") { Navigator.shared.selection = .activity }
+            Button("Today") { Navigator.shared.selection = .today }
                 .keyboardShortcut("2", modifiers: .command)
-            Button("Passport") { Navigator.shared.selection = .passport }
+            Button("Activity") { Navigator.shared.selection = .activity }
                 .keyboardShortcut("3", modifiers: .command)
+            Button("Passport") { Navigator.shared.selection = .passport }
+                .keyboardShortcut("4", modifiers: .command)
             Divider()
             Button("Open Palette…") { PaletteController.shared.show() }
                 .keyboardShortcut("k", modifiers: .command)

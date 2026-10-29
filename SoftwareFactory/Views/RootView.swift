@@ -12,6 +12,7 @@ struct RootView: View {
             Group {
                 switch navigator.selection ?? .board {
                 case .board: BoardScreen()
+                case .today: TodayScreen()
                 case .activity: ActivityScreen()
                 case .passport: PassportScreen()
                 case .project(let id): ProjectScreen(id: id)
@@ -32,6 +33,8 @@ private struct Sidebar: View {
             Label("Board", systemImage: "square.grid.2x2.fill")
                 .badge(store.count(.waiting) + store.count(.yourCall))
                 .tag(SidebarItem.board)
+            Label("Today", systemImage: "sun.horizon.fill")
+                .tag(SidebarItem.today)
             Label("Activity", systemImage: "waveform.path.ecg")
                 .tag(SidebarItem.activity)
             Label("Passport", systemImage: "book.closed.fill")

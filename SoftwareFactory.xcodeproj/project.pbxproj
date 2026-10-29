@@ -26,13 +26,16 @@
 		51D130A3540C8CC1C0C3B9FD /* ClaudeSetup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DE41ABF704054893FFCD764 /* ClaudeSetup.swift */; };
 		54BF19B1B186F649C9CC8BF0 /* Palette.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABECEBA318DF256AAAD0079A /* Palette.swift */; };
 		5BF27930AC61A411E263B3AC /* ProjectPath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EBEF5BC108AC432DBE02618 /* ProjectPath.swift */; };
+		5E51D03553ADEB99F430E488 /* Digest.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECC0D4C8335D396962830293 /* Digest.swift */; };
 		60D16C38456DE2A31475DA23 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0643822BA032DA6D23220A7A /* RootView.swift */; };
 		626DDE9F7894F8423FF1DB74 /* API.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89C6E283A5FDD0DE92CAE21C /* API.swift */; };
 		6C85E6A75E4665E0BD5370F7 /* BoardMerge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D94AE4565CC38EEEB3B6796 /* BoardMerge.swift */; };
 		72ECA72188357836E217A959 /* Navigator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47DEA1EB46AA6BF8D7B327FD /* Navigator.swift */; };
+		88D12021201B62AF7FCCE862 /* TodayScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = C891FB31198247DFD0150F56 /* TodayScreen.swift */; };
 		8D85FDE9A60941EC07074EEA /* Discovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B75C7F6A32912C804347908 /* Discovery.swift */; };
 		927C3C8E608036DDFF8F8549 /* ServerController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23AA7671D5A8D6B9C0D9E3B8 /* ServerController.swift */; };
 		9377BC6790651F2274B3AB40 /* SyncFolder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E8B1FB6D05761156229BCDE /* SyncFolder.swift */; };
+		9514D63FB689FD23E63F7849 /* DigestStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F307B62B1D5237572FA80E0B /* DigestStore.swift */; };
 		AD3B904994B882278CDAA605 /* BoardScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA150EE525FC15DC9D7EED22 /* BoardScreen.swift */; };
 		B213F8767BF74C55D9020DE8 /* Project.swift in Sources */ = {isa = PBXBuildFile; fileRef = 977DD354A7F535B809419220 /* Project.swift */; };
 		B741AF75DA70462818288866 /* Snapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3337D5EF310805146783373B /* Snapshot.swift */; };
@@ -114,6 +117,7 @@
 		BC4108F9413F726771B2206C /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 		BE71367B597BD9790D2529D7 /* ProjectStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectStore.swift; sourceTree = "<group>"; };
 		C4875B8A7B9F867027B68E27 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		C891FB31198247DFD0150F56 /* TodayScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayScreen.swift; sourceTree = "<group>"; };
 		C8EBC3DB50A0488EA40BB9DD /* HTTPServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPServer.swift; sourceTree = "<group>"; };
 		D18724B419AD48D15C21398E /* AppStoreStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoreStatus.swift; sourceTree = "<group>"; };
 		D24E405E45B64954072FCFE9 /* Passport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Passport.swift; sourceTree = "<group>"; };
@@ -122,7 +126,9 @@
 		E592DD4274532C9C48A772D6 /* SoftwareFactoryApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoftwareFactoryApp.swift; sourceTree = "<group>"; };
 		EA150EE525FC15DC9D7EED22 /* BoardScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardScreen.swift; sourceTree = "<group>"; };
 		EB027E930C7686E99F77789A /* AppStoreConnect.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoreConnect.swift; sourceTree = "<group>"; };
+		ECC0D4C8335D396962830293 /* Digest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Digest.swift; sourceTree = "<group>"; };
 		F1A202333F926B3A9E29FFB0 /* TranscriptScan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptScan.swift; sourceTree = "<group>"; };
+		F307B62B1D5237572FA80E0B /* DigestStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DigestStore.swift; sourceTree = "<group>"; };
 		F85458AA116C9B36E96F9338 /* factory */ = {isa = PBXFileReference; includeInIndex = 0; path = factory; sourceTree = BUILT_PRODUCTS_DIR; };
 		FE6236000A3ADCCBE526904B /* HotKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotKey.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -143,6 +149,7 @@
 				D18724B419AD48D15C21398E /* AppStoreStatus.swift */,
 				0D94AE4565CC38EEEB3B6796 /* BoardMerge.swift */,
 				5BC811928D0E9E9C6867A97E /* ClaudeHook.swift */,
+				ECC0D4C8335D396962830293 /* Digest.swift */,
 				A725CBC37F9F5C022AD6EF80 /* Formats.swift */,
 				D24E405E45B64954072FCFE9 /* Passport.swift */,
 				977DD354A7F535B809419220 /* Project.swift */,
@@ -219,6 +226,7 @@
 			children = (
 				EB027E930C7686E99F77789A /* AppStoreConnect.swift */,
 				40CE93F5B9EE1786B5009D1C /* DesktopChats.swift */,
+				F307B62B1D5237572FA80E0B /* DigestStore.swift */,
 				8B75C7F6A32912C804347908 /* Discovery.swift */,
 				61BE9BF2EEF5C82BE66196EE /* Notifier.swift */,
 				6956F65400F196C680A73E41 /* PassportStore.swift */,
@@ -262,6 +270,7 @@
 				0643822BA032DA6D23220A7A /* RootView.swift */,
 				C4875B8A7B9F867027B68E27 /* SettingsView.swift */,
 				4717CD16391BD36BDBFB83C9 /* Timeline.swift */,
+				C891FB31198247DFD0150F56 /* TodayScreen.swift */,
 				BC1078298F54C740EF473105 /* TodoCard.swift */,
 			);
 			path = Views;
@@ -405,6 +414,8 @@
 				51D130A3540C8CC1C0C3B9FD /* ClaudeSetup.swift in Sources */,
 				DA699A2014B4EB15AB27D62C /* Components.swift in Sources */,
 				5102FCA536E81E033CA94CD1 /* DesktopChats.swift in Sources */,
+				5E51D03553ADEB99F430E488 /* Digest.swift in Sources */,
+				9514D63FB689FD23E63F7849 /* DigestStore.swift in Sources */,
 				8D85FDE9A60941EC07074EEA /* Discovery.swift in Sources */,
 				C445B28ECF6951B4E26C9E8D /* Formats.swift in Sources */,
 				10792483EAC985226EA29329 /* HTTPServer.swift in Sources */,
@@ -432,6 +443,7 @@
 				9377BC6790651F2274B3AB40 /* SyncFolder.swift in Sources */,
 				32AEB4813059494CFD9F9121 /* Theme.swift in Sources */,
 				2DF2B9F303A2D6B4C6A6936B /* Timeline.swift in Sources */,
+				88D12021201B62AF7FCCE862 /* TodayScreen.swift in Sources */,
 				34C1A1E74D5384B0E63CF4B5 /* TodoCard.swift in Sources */,
 				05B22A1F26CBA0B6F1B0B487 /* TranscriptScan.swift in Sources */,
 				F465E2342AC74DAE243771B4 /* TranscriptTally.swift in Sources */,

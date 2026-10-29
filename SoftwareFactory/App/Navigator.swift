@@ -3,6 +3,7 @@ import Observation
 
 enum SidebarItem: Hashable {
     case board
+    case today
     case activity
     case passport
     case project(String)

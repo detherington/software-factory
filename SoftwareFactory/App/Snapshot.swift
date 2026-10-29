@@ -16,6 +16,7 @@ enum Snapshot {
                 .environment(Navigator.shared)
                 .environment(PassportStore.shared)
                 .environment(PromptStore.shared)
+                .environment(DigestStore.shared)
                 .environment(\.colorScheme, .dark)
                 .tint(Switchyard.accent)
                 .frame(width: width)
@@ -30,6 +31,7 @@ enum Snapshot {
         }
 
         render(BoardContent().padding(28), width: 1240, name: "board.png")
+        render(TodayContent().padding(28), width: 1240, name: "today.png")
         for project in store.board.prefix(3) + also.compactMap({ store[$0] }) {
             render(ProjectContent(project: project, timelineLimit: 8).padding(28), width: 1100, name: "project-\(project.id).png")
         }

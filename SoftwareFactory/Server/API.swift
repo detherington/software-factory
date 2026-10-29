@@ -139,6 +139,9 @@ enum API {
                 // ?period=this-week (the default), last-week or month.
                 let period = PassportPeriod(rawValue: request.query["period"] ?? "") ?? .thisWeek
                 return try encode(PassportStore.shared.summary(period, now: .now))
+            case ("GET", "api/digest"):
+                // Today's digest: the one sent today, or the one that's coming.
+                return try encode(DigestStore.shared.digest(now: .now))
             case ("GET", "api/factory"):
                 // The command-line tool, for `curl … -o ~/.local/bin/factory` on another Mac.
                 guard let data = try? Data(contentsOf: Bundle.main.bundleURL.appending(path: "Contents/MacOS/factory")) else {
@@ -166,6 +169,10 @@ enum API {
                     try? data?.write(to: out.appending(path: "palette.json"))
                 }
                 return .json(Data("{\"ok\":true}".utf8))
+            case ("POST", "api/debug/digest"):
+                // Sends today's digest now, whatever the time and whether or not it went out already.
+                Task { await DigestStore.shared.send(now: .now, force: true) }
+                return .json(Data("{\"ok\":true}".utf8))
             case ("POST", "api/debug/read-passport"):
                 Task { await PassportStore.shared.read() }
                 return .json(Data("{\"ok\":true}".utf8))
@@ -177,7 +184,7 @@ enum API {
                 let written = Snapshot.write(to: URL(fileURLWithPath: directory), store: store, also: also)
                 return .json(try JSONSerialization.data(withJSONObject: ["written": written], options: .prettyPrinted))
             #endif
-            case (_, "api/projects/*"), (_, "api/projects"), (_, "api/prompts"), (_, "api/project"), (_, "api/report"), (_, "api/hooks/claude"),
+            case (_, "api/projects/*"), (_, "api/projects"), (_, "api/prompts"), (_, "api/digest"), (_, "api/project"), (_, "api/report"), (_, "api/hooks/claude"),
                  (_, "api/projects/*/todos"), (_, "api/projects/*/todos/*"), (_, "api/todos"):
                 return .error(405, "\(request.method) isn't supported here.")
             default:

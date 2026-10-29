@@ -22,14 +22,16 @@ A status board for every coding project on this Mac: what's being worked on, wha
   - **To start with:** three prompts for every project (Commit and push, Tidy loose ends, What's next?). Change or delete them as you like.
   - **Sync:** prompts sync between Macs. The latest change to each wins.
 - **The palette.** ⌘K in the board window, or ⌥⌘K from any app (Settings › General turns that off). Type a project's code or name, then Tab or a space for what you can do there: open it, open its chat, show it in Finder or Terminal, or start one of its prompts. Keep typing to narrow the prompts. Words that match nothing become a to-do or a new chat: `emn todo fix the page turn` adds a to-do to Emanata, and `emn why does the reader stutter?` starts a chat with that question typed in.
-- **Activity.** Every project's timeline, merged.
-- **Passport.** Your week in numbers (⌘3): the hours Claude worked, sessions, commits, TestFlight builds, releases and tokens. Each day is a bar, each project a row, and milestones get stamps: a release, a new project, the busiest day, the longest turn, days in a row. Switch between this week, last week and the last 30 days. See [Passport](#passport).
+- **Morning digest.** One notification a day, at 9:00 unless you pick another time: "Yesterday: 6.5 hours, 31 commits, 3 TestFlight builds. Waiting on you: Emanata and Rounds." It comes the first time you use a Mac after that time, and only one of your Macs sends it. Click it for **Today** (⌘2), which has the same numbers and a list of what's been left, each with what to do about it. See [Morning digest](#morning-digest).
+- **Activity.** Every project's timeline, merged (⌘3).
+- **Passport.** Your week in numbers (⌘4): the hours Claude worked, sessions, commits, TestFlight builds, releases and tokens. Each day is a bar, each project a row, and milestones get stamps: a release, a new project, the busiest day, the longest turn, days in a row. Switch between this week, last week and the last 30 days. See [Passport](#passport).
 - **Notifications.** It tells you when something changes instead of waiting for you to look. Each kind can be switched off in Settings › Notifications:
   - **Needs you, Your call, Blocked:** when a session enters one, with its message. These make a sound.
   - **Background work finished:** a background command or agent.
   - **Shipped:** a release.
   - **TestFlight build ready:** a build has finished processing and can be tested.
   - **Turn finished:** a turn that ended without a question. Off by default.
+  - **A reminder after an hour:** the same notice again, with a sound, when something has waited on you for an hour. Off by default.
 
   Clicking one opens the session's Claude Desktop chat when it has one, and the board otherwise; **Open Chat** and **Show on Board** do the same from the notification. Notifications are grouped by project, several arriving together come as one, and a "needs you" leaves Notification Center once it's answered. Sessions on other Macs notify too, labeled with the Mac (switch that off in Settings). Only what happened in the last two minutes notifies, so opening the app, or a synced board catching up, doesn't replay old news.
 - **TestFlight and the App Store.** With an App Store Connect API key, each app's card shows its latest build and App Store version: "1.0 · In testing", "1.0 · Waiting for review", "1.1 · On the App Store". Its project page lists recent builds for each platform. A build that fails processing or a rejected version turns the card Blocked, and a version going live counts as Shipped. See [App Store Connect](#app-store-connect).
@@ -161,7 +163,7 @@ Each Mac can run its own board, and they share through iCloud Drive:
 
 How it works:
 
-- **Files.** Each board writes its own Mac's projects to `iCloud Drive/Software Factory/Boards/<this Mac's id>.json`, at most every five seconds, and reads the other Macs' files every five seconds. A Mac only ever writes its own file, so the two never conflict. Saved prompts (`Prompts/`) and the Passport's numbers (`Stats/`) are shared the same way, in folders beside `Boards/`. No Apple Developer account or iCloud entitlement is involved: iCloud Drive is just a folder to the app.
+- **Files.** Each board writes its own Mac's projects to `iCloud Drive/Software Factory/Boards/<this Mac's id>.json`, at most every five seconds, and reads the other Macs' files every five seconds. A Mac only ever writes its own file, so the two never conflict. Saved prompts (`Prompts/`), the Passport's numbers (`Stats/`) and the digest's sends and snoozes (`Digest/`) are shared the same way, in folders beside `Boards/`. No Apple Developer account or iCloud entitlement is involved: iCloud Drive is just a folder to the app.
 - **Merging.**
   - A project on several Macs (same id, repository or name) is one card, and each session and timeline entry carries its Mac's name.
   - For what was reported (state, task, note, milestone, progress, steps, version), the newest report wins, wherever it was made.
@@ -225,6 +227,19 @@ How it reads:
 - **Kept for good.** Claude Code deletes transcripts after 30 days (`cleanupPeriodDays`), but what they added up to stays in `passport.json`. Comparisons with an earlier period appear once the record reaches back that far.
 - **Both Macs.** With Sync on, each Mac shares its numbers in `iCloud Drive/Software Factory/Stats/<this Mac's id>.json`, and the Passport adds up every Mac's. A repository cloned on both counts its commits once.
 
+## Morning digest
+
+Settings › Morning Digest sets the time and the days (every day, or weekdays), or turns it off.
+
+- **What it covers.** The days since the last digest, through yesterday, for a week at most. Monday's includes the weekend, and a digest after a few days away covers them all. The numbers are the [Passport](#passport)'s, read again first so last night's work counts.
+- **What's been left.**
+  - **Waiting on you:** questions, permission prompts and plans waiting for an answer, and blocked projects. A question older than a day stays on the list until the project moves on or its chat is archived.
+  - **Loose ends:** uncommitted or unpushed work in a project nobody has touched for a day. On this Mac, **Tidy loose ends** starts that prompt there.
+  - **Old to-dos:** to-dos nobody has touched for a week. Tick them off, or start one in Claude.
+- **Snoozing.** The moon button on each item snoozes it for a day or a week, on every Mac. **Wake Them**, at the foot of Today, brings back everything snoozed.
+- **When it comes.** At the time you set, it waits until you've used the Mac in the last two minutes, so it arrives when you sit down. With nothing worked on and nothing left, it doesn't come.
+- **One Mac sends it.** With Sync on, each Mac shares when it last sent a digest, and what's snoozed, in `iCloud Drive/Software Factory/Digest/<this Mac's id>.json`. Once one Mac has sent today's digest, the others don't.
+
 ## The `factory` command
 
 ```bash
@@ -277,6 +292,7 @@ The API listens on `127.0.0.1:7720`, and only on this Mac unless Other Macs is o
 | GET | `/api/prompts` | Saved prompts: `project` is a project's id, or missing for every project |
 | POST | `/api/prompts` | Saves one: `{"title": "…", "text": "…", "project": "…"}`, without `project` for every project |
 | GET | `/api/passport` | The Passport's numbers: `?period=this-week` (the default), `last-week` or `month` |
+| GET | `/api/digest` | Today's digest: the one sent today, or the one that's coming, with its numbers and what's been left |
 | GET | `/api/factory` | The `factory` command, for setting up another Mac |
 
 ### Reports
@@ -322,7 +338,7 @@ The reply is the project as the board shows it: `state` and `label` ("Needs you"
 
 ## Data
 
-The board lives in `~/Library/Application Support/Software Factory/projects.json`, the Passport's record in `passport.json` and saved prompts in `prompts.json` beside it. Each project keeps its last 200 events and up to 12 sessions. Sessions nobody has heard from in three days are dropped.
+The board lives in `~/Library/Application Support/Software Factory/projects.json`, the Passport's record in `passport.json`, saved prompts in `prompts.json` and the digest's last send and snoozes in `digest.json` beside it. Each project keeps its last 200 events and up to 12 sessions. Sessions nobody has heard from in three days are dropped.
 
 ## Development
 
