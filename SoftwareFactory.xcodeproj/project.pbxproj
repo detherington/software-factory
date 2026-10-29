@@ -18,6 +18,7 @@
 		0D13F5230DB5D8D802DB5842 /* Formats.swift in Sources */ = {isa = PBXBuildFile; fileRef = A725CBC37F9F5C022AD6EF80 /* Formats.swift */; };
 		0E455D0515450563199323E7 /* PromptsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 561480044E91CB95E9312C16 /* PromptsCard.swift */; };
 		10792483EAC985226EA29329 /* HTTPServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8EBC3DB50A0488EA40BB9DD /* HTTPServer.swift */; };
+		131BA6DCBB52721C58189E9B /* TodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFBE621D8AA3881DD6578C14 /* TodayView.swift */; };
 		14D4FEF683794F1659359638 /* JSONDates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A37994D244EC3366BA22E8B /* JSONDates.swift */; };
 		169D4B3D0F72F8AC3F133612 /* ProjectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2926439496C883742795C774 /* ProjectView.swift */; };
 		1EFF36E93CFC965F810AA157 /* PhoneShare.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4304961679E593F33E28F272 /* PhoneShare.swift */; };
@@ -26,17 +27,20 @@
 		2DF2B9F303A2D6B4C6A6936B /* Timeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4717CD16391BD36BDBFB83C9 /* Timeline.swift */; };
 		2EB7CB34F1DC22D85B3DEB6E /* CloudBoard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34E846E77D63ADDA84802F52 /* CloudBoard.swift */; };
 		32AEB4813059494CFD9F9121 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F101127FEA2EA48928C7D6C /* Theme.swift */; };
+		341D8ABCF669CB4378E286AC /* TranscriptTally.swift in Sources */ = {isa = PBXBuildFile; fileRef = 750986EBDE0BCB38AAA4A331 /* TranscriptTally.swift */; };
 		345216C2EE86D945C08268C6 /* JSONDates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A37994D244EC3366BA22E8B /* JSONDates.swift */; };
 		347BBA9B0E00AB74B7FB63B2 /* PromptStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE55A3E797CBE890A2D2A913 /* PromptStore.swift */; };
 		34C1A1E74D5384B0E63CF4B5 /* TodoCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC1078298F54C740EF473105 /* TodoCard.swift */; };
 		38E39B98BA58BCD10DC6E71F /* JSONDates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A37994D244EC3366BA22E8B /* JSONDates.swift */; };
 		3CA1D9593DF58336F370D7F6 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02DC087BA4748B349A065F2E /* main.swift */; };
+		3CF08081B18150C79D1B8408 /* Digest.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECC0D4C8335D396962830293 /* Digest.swift */; };
 		4079DD5D9321BECEADD8BECD /* PhoneApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62FF46A10BBF5E44494FCED1 /* PhoneApp.swift */; };
 		4871EDB7ABD836392782306A /* AppStoreStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = D18724B419AD48D15C21398E /* AppStoreStatus.swift */; };
 		5102FCA536E81E033CA94CD1 /* DesktopChats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40CE93F5B9EE1786B5009D1C /* DesktopChats.swift */; };
 		51D130A3540C8CC1C0C3B9FD /* ClaudeSetup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DE41ABF704054893FFCD764 /* ClaudeSetup.swift */; };
 		54BF19B1B186F649C9CC8BF0 /* Palette.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABECEBA318DF256AAAD0079A /* Palette.swift */; };
 		599759551A0C137DFE3538F7 /* PhoneBoard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60082008722015273078B9DF /* PhoneBoard.swift */; };
+		59DFA1F6E9E719260457EE27 /* Digest.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECC0D4C8335D396962830293 /* Digest.swift */; };
 		5BBD73933021332E7875437C /* WidgetViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40EB83A30B5EE7057C3B743D /* WidgetViews.swift */; };
 		5BF27930AC61A411E263B3AC /* ProjectPath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EBEF5BC108AC432DBE02618 /* ProjectPath.swift */; };
 		5E51D03553ADEB99F430E488 /* Digest.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECC0D4C8335D396962830293 /* Digest.swift */; };
@@ -56,6 +60,7 @@
 		9377BC6790651F2274B3AB40 /* SyncFolder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E8B1FB6D05761156229BCDE /* SyncFolder.swift */; };
 		944088F24ED83D9F4E847BB1 /* SoftwareFactoryPhoneWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 43FCF049FD1CF8505C9075B6 /* SoftwareFactoryPhoneWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		9514D63FB689FD23E63F7849 /* DigestStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F307B62B1D5237572FA80E0B /* DigestStore.swift */; };
+		9A7E3080A59DA04FAE5E9C6A /* TranscriptTally.swift in Sources */ = {isa = PBXBuildFile; fileRef = 750986EBDE0BCB38AAA4A331 /* TranscriptTally.swift */; };
 		9BE2E298FFCEECE0BDBD311D /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F101127FEA2EA48928C7D6C /* Theme.swift */; };
 		A8AD14471E6DFFD2F73BA65A /* JSONDates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A37994D244EC3366BA22E8B /* JSONDates.swift */; };
 		A9F704270F697FCEA06BA82C /* Project.swift in Sources */ = {isa = PBXBuildFile; fileRef = 977DD354A7F535B809419220 /* Project.swift */; };
@@ -78,8 +83,10 @@
 		E35139D4DA0FAE569E6CF169 /* ProjectScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4F8FB5A083F5B981533DEE7 /* ProjectScreen.swift */; };
 		E47DB2682444BA89860141D5 /* Passport.swift in Sources */ = {isa = PBXBuildFile; fileRef = D24E405E45B64954072FCFE9 /* Passport.swift */; };
 		E9198CF47D64BA1FAA971BFF /* Notifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61BE9BF2EEF5C82BE66196EE /* Notifier.swift */; };
+		E92E7C9912238DE8166992A3 /* Passport.swift in Sources */ = {isa = PBXBuildFile; fileRef = D24E405E45B64954072FCFE9 /* Passport.swift */; };
 		EF12394E9693EB28DCDECEBE /* Report.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAEE6799FC5F4B9F63B79D08 /* Report.swift */; };
 		F465E2342AC74DAE243771B4 /* TranscriptTally.swift in Sources */ = {isa = PBXBuildFile; fileRef = 750986EBDE0BCB38AAA4A331 /* TranscriptTally.swift */; };
+		F52116BDFBB4668D8D6C8CB0 /* Passport.swift in Sources */ = {isa = PBXBuildFile; fileRef = D24E405E45B64954072FCFE9 /* Passport.swift */; };
 		F621D3BB983A951B19498651 /* CloudBoard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34E846E77D63ADDA84802F52 /* CloudBoard.swift */; };
 		F7D95F73C224E6480C383666 /* Updater.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33DB23C4B4FA4805D6ADB56C /* Updater.swift */; };
 		FA87ABF0D4451D8A32D3AF7D /* MenuBarPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80B2D8F210A74B022475BCC7 /* MenuBarPanel.swift */; };
@@ -185,6 +192,7 @@
 		D3F8F22E70776E26B090BD93 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		DAEE6799FC5F4B9F63B79D08 /* Report.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Report.swift; sourceTree = "<group>"; };
 		DFBCDC632AA65855A6215F75 /* BoardCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardCache.swift; sourceTree = "<group>"; };
+		DFBE621D8AA3881DD6578C14 /* TodayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayView.swift; sourceTree = "<group>"; };
 		E4F8FB5A083F5B981533DEE7 /* ProjectScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectScreen.swift; sourceTree = "<group>"; };
 		E592DD4274532C9C48A772D6 /* SoftwareFactoryApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoftwareFactoryApp.swift; sourceTree = "<group>"; };
 		EA150EE525FC15DC9D7EED22 /* BoardScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardScreen.swift; sourceTree = "<group>"; };
@@ -381,6 +389,7 @@
 				62FF46A10BBF5E44494FCED1 /* PhoneApp.swift */,
 				60082008722015273078B9DF /* PhoneBoard.swift */,
 				2926439496C883742795C774 /* ProjectView.swift */,
+				DFBE621D8AA3881DD6578C14 /* TodayView.swift */,
 				9C9B5FC8B0D1CFFD06F05FE8 /* WidgetGallery.swift */,
 				CCBA5FE133E7BBA622DF17DD /* Resources */,
 			);
@@ -565,11 +574,14 @@
 				022F8615CB5176A7BB7EDA73 /* BoardCache.swift in Sources */,
 				2EB7CB34F1DC22D85B3DEB6E /* CloudBoard.swift in Sources */,
 				758E7F843CCBDABE9E758FF1 /* Components.swift in Sources */,
+				3CF08081B18150C79D1B8408 /* Digest.swift in Sources */,
 				BE627B78D55353A98B5334D7 /* FactoryWidgets.swift in Sources */,
 				DB67054982E4B68CBBA22CCB /* Formats.swift in Sources */,
 				A8AD14471E6DFFD2F73BA65A /* JSONDates.swift in Sources */,
+				E92E7C9912238DE8166992A3 /* Passport.swift in Sources */,
 				A9F704270F697FCEA06BA82C /* Project.swift in Sources */,
 				650CDC87ADE537D65716F0D7 /* Theme.swift in Sources */,
+				9A7E3080A59DA04FAE5E9C6A /* TranscriptTally.swift in Sources */,
 				5BBD73933021332E7875437C /* WidgetViews.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -594,13 +606,17 @@
 				5F6A797C15D3FF2ACCCE99BA /* BoardView.swift in Sources */,
 				F621D3BB983A951B19498651 /* CloudBoard.swift in Sources */,
 				2BDA6475ABD16690099BBDE5 /* Components.swift in Sources */,
+				59DFA1F6E9E719260457EE27 /* Digest.swift in Sources */,
 				0D13F5230DB5D8D802DB5842 /* Formats.swift in Sources */,
 				38E39B98BA58BCD10DC6E71F /* JSONDates.swift in Sources */,
+				F52116BDFBB4668D8D6C8CB0 /* Passport.swift in Sources */,
 				4079DD5D9321BECEADD8BECD /* PhoneApp.swift in Sources */,
 				599759551A0C137DFE3538F7 /* PhoneBoard.swift in Sources */,
 				0A35E03AABDD24DEA0CE0ACB /* Project.swift in Sources */,
 				169D4B3D0F72F8AC3F133612 /* ProjectView.swift in Sources */,
 				9BE2E298FFCEECE0BDBD311D /* Theme.swift in Sources */,
+				131BA6DCBB52721C58189E9B /* TodayView.swift in Sources */,
+				341D8ABCF669CB4378E286AC /* TranscriptTally.swift in Sources */,
 				DE377596CDA9DBA98D211FB8 /* WidgetGallery.swift in Sources */,
 				CB219A5B65A734FC058BC91B /* WidgetViews.swift in Sources */,
 			);

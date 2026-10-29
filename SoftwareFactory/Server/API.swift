@@ -177,9 +177,9 @@ enum API {
                 // Reads the board back from iCloud and lists the subscriptions; ?alert=1 saves a test
                 // alert, ?forget=<record> deletes one. The results go to ?out=<file>.
                 let out = URL(fileURLWithPath: request.query["out"] ?? NSTemporaryDirectory() + "phone.json")
-                let (alert, forget) = (request.query["alert"] == "1", request.query["forget"])
+                let (alert, forget, change) = (request.query["alert"] == "1", request.query["forget"], request.query["change"])
                 Task {
-                    let result = await PhoneShare.shared.debugCheck(testAlert: alert, forget: forget)
+                    let result = await PhoneShare.shared.debugCheck(testAlert: alert, forget: forget, change: change)
                     try? JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys]).write(to: out)
                 }
                 return .json(Data("{\"ok\":true}".utf8))

@@ -98,6 +98,13 @@ final class DigestStore {
         save()
     }
 
+    /// A snooze from the iPhone: taken when it's the later decision.
+    func applySnooze(_ snooze: DigestState.Snooze, to nudge: String) {
+        guard state.snoozed[nudge].map({ snooze.set > $0.set }) ?? true else { return }
+        state.snoozed[nudge] = snooze
+        save()
+    }
+
     /// Brings every snoozed nudge back, on every Mac.
     func wakeSnoozed() {
         let now = Date.now
@@ -127,9 +134,21 @@ final class DigestStore {
         await readOtherMacs()
         guard isOn, isDue(at: now), !isSending else { return }
         // When you're at the Mac: you've moved the mouse or typed in the last two minutes.
-        guard ignoresPresence || Presence.secondsSinceInput < 120 else { return }
-        await send(now: now)
+        if (ignoresPresence || Presence.secondsSinceInput < 120) && !PhoneShare.shared.pretendsAway {
+            await send(now: now)
+            return
+        }
+        // Nobody at any Mac three hours after the digest's time: it goes to the iPhone instead.
+        let calendar = Calendar.current
+        let time = calendar.date(byAdding: .minute, value: minutes, to: calendar.startOfDay(for: now)) ?? now
+        let phone = PhoneShare.shared
+        if now >= time.addingTimeInterval(Self.phoneAfter), phone.reachesPhone, phone.lastUsedAnyMac < time {
+            await send(now: now, toPhone: true)
+        }
     }
+
+    /// How long after the digest's time it goes to the iPhone, when nobody has been at a Mac.
+    static let phoneAfter: TimeInterval = 3 * 3600
 
     /// Past today's time, on a digest day, and not sent today by this Mac or another.
     private func isDue(at now: Date) -> Bool {
@@ -140,9 +159,9 @@ final class DigestStore {
         return state.record?.day != keys.key(for: now)
     }
 
-    /// Makes today's digest and sends it, unless there's nothing to say. `force` sends it again, for
-    /// the same days (for testing).
-    func send(now: Date, force: Bool = false) async {
+    /// Makes today's digest and sends it, unless there's nothing to say: as a notification here, or as
+    /// an alert on the iPhone. `force` sends it again, for the same days (for testing).
+    func send(now: Date, force: Bool = false, toPhone: Bool = false) async {
         let passport = PassportStore.shared
         guard !isSending, !passport.isReading || force else { return }
         isSending = true
@@ -152,13 +171,22 @@ final class DigestStore {
         var keys = DayKeys()
         let digest = digest(now: now)
         guard let first = digest.days.first, let last = digest.days.last else { return }
-        state.record = DigestState.Record(day: keys.key(for: now), from: keys.key(for: first), through: keys.key(for: last),
-                                          sent: digest.isEmpty ? nil : now, machine: ProjectStore.shared.machineName)
-        save()
         guard !digest.isEmpty else {
+            state.record = DigestState.Record(day: keys.key(for: now), from: keys.key(for: first), through: keys.key(for: last),
+                                              sent: nil, machine: ProjectStore.shared.machineName)
+            save()
             log.info("Nothing for the digest today")
             return
         }
+        if toPhone {
+            // Kept for later if the iPhone can't be reached now.
+            guard await PhoneShare.shared.sendAlert(id: "digest.\(keys.key(for: now))", title: digest.title, body: digest.body,
+                                                    project: "today") else { return }
+        }
+        state.record = DigestState.Record(day: keys.key(for: now), from: keys.key(for: first), through: keys.key(for: last),
+                                          sent: now, machine: ProjectStore.shared.machineName, toPhone: toPhone ? true : nil)
+        save()
+        guard !toPhone else { return }
         let needsYou = digest.waiting.contains { $0.state?.needsYou == true }
         Notifier.shared.post(Notifier.Notice(key: "digest|\(keys.key(for: now))", kind: "digest", title: digest.title, body: digest.body,
                                              project: "", screen: "today"),

@@ -2,13 +2,16 @@ import CloudKit
 import Foundation
 
 /// The board as the iPhone sees it, in your private iCloud database: each project is a record in the
-/// Board zone, written by the Macs and read by the iPhone app and its widgets. Alerts are records in
-/// the default zone, which a subscription on the iPhone turns into notifications.
+/// Board zone, written by the Macs and read by the iPhone app and its widgets, and so is today's
+/// digest. Alerts are records in the default zone, which a subscription on the iPhone turns into
+/// notifications. What you change on the iPhone (a to-do, a snooze) goes to the Inbox zone, where
+/// the Macs pick it up, fold it into the board and delete it.
 ///
 /// The container is in each app's Info.plist (`FactoryCloudKitContainer`). Debug builds use its
 /// development environment and Release builds production, so testing never reaches the real board.
 nonisolated enum CloudBoard {
     static let zoneID = CKRecordZone.ID(zoneName: "Board", ownerName: CKCurrentUserDefaultName)
+    static let inboxZoneID = CKRecordZone.ID(zoneName: "Inbox", ownerName: CKCurrentUserDefaultName)
 
     enum Field {
         static let data = "data"
@@ -23,6 +26,10 @@ nonisolated enum CloudBoard {
 
     static let projectType = "Project"
     static let alertType = "Alert"
+    static let digestType = "Digest"
+    static let changeType = "Change"
+    /// The digest's one record, replaced as it changes.
+    static let digestRecordName = "today"
     /// The subscriptions the iPhone makes: board changes (silent), and alerts (shown).
     static let boardSubscription = "board-changes"
     static let alertSubscription = "alerts"
@@ -48,17 +55,17 @@ nonisolated enum CloudBoard {
         return copy
     }
 
-    static func encode(_ project: Project) throws -> Data {
+    static func encode<T: Encodable>(_ value: T) throws -> Data {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = JSONDates.encoding
         encoder.outputFormatting = .sortedKeys
-        return try encoder.encode(project)
+        return try encoder.encode(value)
     }
 
-    static func decode(_ data: Data) -> Project? {
+    static func decode<T: Decodable>(_ type: T.Type, from data: Data) -> T? {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = JSONDates.decoding
-        return try? decoder.decode(Project.self, from: data)
+        return try? decoder.decode(type, from: data)
     }
 
     static func recordID(for projectID: String) -> CKRecord.ID {
@@ -74,20 +81,79 @@ nonisolated enum CloudBoard {
         return record
     }
 
-    /// Every project in the zone. There are a few dozen, so it reads them all each time.
-    static func fetchProjects(from database: CKDatabase) async throws -> [Project] {
+    /// Every project in the zone, and today's digest. There are a few dozen records, so it reads them
+    /// all each time.
+    static func fetchBoard(from database: CKDatabase) async throws -> (projects: [Project], digest: Digest?) {
         var projects: [Project] = []
+        var digest: Digest?
+        for record in try await allRecords(in: zoneID, from: database) {
+            guard let data = record[Field.data] as? Data else { continue }
+            if record.recordType == digestType {
+                digest = decode(Digest.self, from: data)
+            } else if let project = decode(Project.self, from: data) {
+                projects.append(project)
+            }
+        }
+        return (projects, digest)
+    }
+
+    static func fetchProjects(from database: CKDatabase) async throws -> [Project] {
+        try await fetchBoard(from: database).projects
+    }
+
+    static func allRecords(in zone: CKRecordZone.ID, from database: CKDatabase) async throws -> [CKRecord] {
+        var records: [CKRecord] = []
         var token: CKServerChangeToken?
         var more = true
         while more {
-            let changes = try await database.recordZoneChanges(inZoneWith: zoneID, since: token)
-            for case .success(let modification) in changes.modificationResultsByID.values {
-                if let data = modification.record[Field.data] as? Data, let project = decode(data) { projects.append(project) }
-            }
+            let changes = try await database.recordZoneChanges(inZoneWith: zone, since: token)
+            for case .success(let modification) in changes.modificationResultsByID.values { records.append(modification.record) }
             token = changes.changeToken
             more = changes.moreComing
         }
-        return projects
+        return records
+    }
+
+    // MARK: - The digest
+
+    static func digestRecord(_ data: Data) -> CKRecord {
+        let record = CKRecord(recordType: digestType, recordID: CKRecord.ID(recordName: digestRecordName, zoneID: zoneID))
+        record[Field.data] = data
+        record[Field.updated] = Date.now
+        return record
+    }
+
+    // MARK: - Changes from the iPhone
+
+    /// Something changed on the iPhone, for the Macs to fold in.
+    struct Change: Codable, Sendable {
+        enum Kind: String, Codable, Sendable { case todo, snooze }
+
+        var kind: Kind
+        /// The project, as the board the iPhone saw names it, and its name, to find it on any Mac.
+        var project: String?
+        var projectName: String?
+        /// The to-do as it now stands: added, ticked, reworded or deleted.
+        var todo: Todo?
+        /// A nudge snoozed, and until when.
+        var nudge: String?
+        var snooze: DigestState.Snooze?
+    }
+
+    static func record(for change: Change) throws -> CKRecord {
+        let record = CKRecord(recordType: changeType, recordID: CKRecord.ID(recordName: UUID().uuidString, zoneID: inboxZoneID))
+        record[Field.data] = try encode(change)
+        record[Field.created] = Date.now
+        return record
+    }
+
+    /// What's waiting in the inbox, oldest first.
+    static func fetchChanges(from database: CKDatabase) async throws -> [(id: CKRecord.ID, change: Change)] {
+        try await allRecords(in: inboxZoneID, from: database)
+            .sorted { ($0[Field.created] as? Date ?? .distantPast) < ($1[Field.created] as? Date ?? .distantPast) }
+            .compactMap { record in
+                (record[Field.data] as? Data).flatMap { decode(Change.self, from: $0) }.map { (record.recordID, $0) }
+            }
     }
 
     // MARK: - Subscriptions

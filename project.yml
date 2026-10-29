@@ -99,6 +99,9 @@ targets:
       - path: SoftwareFactory/Model/Project.swift
       - path: SoftwareFactory/Model/Formats.swift
       - path: SoftwareFactory/Model/AppStoreStatus.swift
+      - path: SoftwareFactory/Model/Digest.swift
+      - path: SoftwareFactory/Model/Passport.swift
+      - path: SoftwareFactory/Model/TranscriptTally.swift
       - path: SoftwareFactory/Design/Theme.swift
       - path: SoftwareFactory/Design/Components.swift
       - path: Shared/JSONDates.swift
@@ -140,6 +143,9 @@ targets:
       - path: SoftwareFactory/Model/Project.swift
       - path: SoftwareFactory/Model/Formats.swift
       - path: SoftwareFactory/Model/AppStoreStatus.swift
+      - path: SoftwareFactory/Model/Digest.swift
+      - path: SoftwareFactory/Model/Passport.swift
+      - path: SoftwareFactory/Model/TranscriptTally.swift
       - path: SoftwareFactory/Design/Theme.swift
       - path: SoftwareFactory/Design/Components.swift
       - path: Shared/JSONDates.swift

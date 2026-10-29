@@ -102,8 +102,8 @@ enum PassportPeriod: String, CaseIterable, Identifiable, Sendable {
 }
 
 /// A period's numbers, ready to show.
-struct PassportSummary: Encodable, Sendable {
-    struct Day: Identifiable, Encodable, Sendable {
+struct PassportSummary: Codable, Sendable {
+    struct Day: Identifiable, Codable, Sendable {
         var id: String
         var date: Date
         var usage: Usage
@@ -113,7 +113,7 @@ struct PassportSummary: Encodable, Sendable {
         var isFuture: Bool
     }
 
-    struct Row: Identifiable, Encodable, Sendable {
+    struct Row: Identifiable, Codable, Sendable {
         /// A project's id; "" for folders that aren't projects.
         var id: String
         var usage = Usage()
@@ -124,7 +124,7 @@ struct PassportSummary: Encodable, Sendable {
     }
 
     /// A milestone, shown like a passport stamp.
-    struct Stamp: Identifiable, Encodable, Sendable {
+    struct Stamp: Identifiable, Codable, Sendable {
         var id: String
         var label: String
         var value: String

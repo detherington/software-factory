@@ -383,6 +383,25 @@ final class ProjectStore {
         }
     }
 
+    /// A to-do as another device left it (the iPhone): taken when it's the later change. Returns
+    /// whether the project is here to take it.
+    @discardableResult
+    func mergeTodo(_ todo: Todo, into id: String) -> Bool {
+        guard let project = projects[id] else { return false }
+        let current = project.todos?.first { $0.id == todo.id }
+        guard current.map(todo.supersedes) ?? true else { return true }
+        update(id) { p in
+            var todos = (p.todos ?? []).filter { $0.id != todo.id }
+            todos.append(todo)
+            p.todos = Self.pruned(todos, at: .now)
+            if todo.done, current?.done != true, !todo.deleted {
+                p.log(Event(date: todo.completed ?? todo.updated, state: .done, symbol: "checkmark.square.fill", title: todo.text,
+                            detail: String(localized: "To-do done")))
+            }
+        }
+        return true
+    }
+
     func deleteTodo(_ todoID: UUID, in id: String) {
         editTodo(todoID, in: id) { todo, _ in todo.deleted = true }
     }

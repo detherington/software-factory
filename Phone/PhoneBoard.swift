@@ -5,13 +5,16 @@ import WidgetKit
 
 /// The board on the iPhone: fetched from your private iCloud database, where the Macs leave it,
 /// when the app opens, when you pull to refresh, and when iCloud says it changed. The widgets read
-/// what it fetched last.
+/// what it fetched last. To-dos and snoozes changed here go to the inbox for the Macs, and show at
+/// once: each stays applied until a fetched board has it.
 @MainActor
 @Observable
 final class PhoneBoard {
     static let shared = PhoneBoard()
 
     private(set) var projects: [Project] = []
+    /// Today's digest, as a Mac made it.
+    private(set) var digest: Digest?
     private(set) var fetched: Date?
     private(set) var problem: String?
     private(set) var isRefreshing = false
@@ -21,6 +24,10 @@ final class PhoneBoard {
     var opened: String?
 
     @ObservationIgnored private var clock: Task<Void, Never>?
+    /// Changes made here that a fetched board doesn't have yet.
+    @ObservationIgnored private var pendingTodos: [UUID: (project: String, todo: Todo)] = [:]
+    @ObservationIgnored private var pendingSnoozes: [String: Date] = [:]
+    @ObservationIgnored private var inboxReady = false
     /// `-FactorySampleBoard <file>` (Debug): a board from a file instead of iCloud, for looking at
     /// the screens in the Simulator.
     @ObservationIgnored private let sample: String?
@@ -32,12 +39,16 @@ final class PhoneBoard {
         sample = nil
         #endif
         if let sample, let data = try? Data(contentsOf: URL(fileURLWithPath: sample)) {
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = JSONDates.decoding
-            projects = (try? decoder.decode([Project].self, from: data)) ?? []
+            projects = CloudBoard.decode([Project].self, from: data) ?? []
+            #if DEBUG
+            digest = UserDefaults.standard.string(forKey: "FactorySampleDigest")
+                .flatMap { try? Data(contentsOf: URL(fileURLWithPath: $0)) }
+                .flatMap { CloudBoard.decode(Digest.self, from: $0) }
+            #endif
             fetched = .now
         } else if let cache = BoardCache.read() {
             projects = cache.projects
+            digest = cache.digest
             fetched = cache.fetched
         }
         clock = Task { [weak self] in
@@ -87,21 +98,121 @@ final class PhoneBoard {
         isRefreshing = true
         defer { isRefreshing = false }
         do {
-            projects = try await CloudBoard.fetchProjects(from: database)
+            let board = try await CloudBoard.fetchBoard(from: database)
+            projects = board.projects
+            digest = board.digest
             fetched = .now
             now = .now
             problem = nil
-            BoardCache.write(BoardCache.Saved(projects: projects, fetched: fetched!))
-            WidgetCenter.shared.reloadAllTimelines()
+            reapplyPending()
+            saveCache()
         } catch {
             problem = Self.describe(error)
         }
     }
 
-    /// softwarefactory://project/<id>, from a widget.
+    // MARK: - Changes made here
+
+    func addTodo(_ text: String, to project: Project) {
+        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        let now = Date.now
+        change(Todo(text: text, created: now, updated: now), in: project)
+    }
+
+    func setTodo(_ todo: Todo, done: Bool, in project: Project) {
+        var todo = todo
+        todo.done = done
+        todo.completed = done ? .now : nil
+        todo.updated = .now
+        change(todo, in: project)
+    }
+
+    func deleteTodo(_ todo: Todo, in project: Project) {
+        var todo = todo
+        todo.deleted = true
+        todo.updated = .now
+        change(todo, in: project)
+    }
+
+    /// Hides a nudge from Today, here and on the Macs, for a day or a week.
+    func snooze(_ nudge: Nudge, days: Int) {
+        let now = Date.now
+        let until = now.addingTimeInterval(Double(days) * 86_400)
+        pendingSnoozes[nudge.id] = until
+        applySnoozes()
+        saveCache()
+        send(CloudBoard.Change(kind: .snooze, nudge: nudge.id, snooze: DigestState.Snooze(until: until, set: now)))
+    }
+
+    private func change(_ todo: Todo, in project: Project) {
+        pendingTodos[todo.id] = (project.id, todo)
+        apply(todo, to: project.id)
+        saveCache()
+        send(CloudBoard.Change(kind: .todo, project: project.id, projectName: project.name, todo: todo))
+    }
+
+    private func apply(_ todo: Todo, to projectID: String) {
+        guard let index = projects.firstIndex(where: { $0.id == projectID }) else { return }
+        var todos = (projects[index].todos ?? []).filter { $0.id != todo.id }
+        todos.append(todo)
+        projects[index].todos = todos
+        // Today's old to-dos: one done or deleted leaves the list.
+        guard var digest, todo.done || todo.deleted else { return }
+        for index in digest.todos.indices { digest.todos[index].todos?.removeAll { $0.id == todo.id } }
+        digest.todos.removeAll { $0.todos?.isEmpty ?? true }
+        self.digest = digest
+    }
+
+    private func applySnoozes() {
+        guard var digest else { return }
+        let snoozed = { (nudge: Nudge) in self.pendingSnoozes[nudge.id].map { $0 > .now } ?? false }
+        digest.snoozed += (digest.waiting + digest.looseEnds + digest.todos).filter(snoozed)
+        digest.waiting.removeAll(where: snoozed)
+        digest.looseEnds.removeAll(where: snoozed)
+        digest.todos.removeAll(where: snoozed)
+        self.digest = digest
+    }
+
+    /// After a fetch: what the Macs have folded in is done with; the rest is applied again.
+    private func reapplyPending() {
+        for (id, item) in pendingTodos {
+            let fetched = projects.first { $0.id == item.project }?.todos?.first { $0.id == id }
+            if let fetched, fetched.updated >= item.todo.updated { pendingTodos[id] = nil } else { apply(item.todo, to: item.project) }
+        }
+        // A snooze is done with once a Mac's digest has it, or once it runs out.
+        let snoozedThere = Set(digest?.snoozed.map(\.id) ?? [])
+        pendingSnoozes = pendingSnoozes.filter { !snoozedThere.contains($0.key) && $0.value > .now }
+        applySnoozes()
+    }
+
+    private func saveCache() {
+        guard sample == nil, let fetched else { return }
+        BoardCache.write(BoardCache.Saved(projects: projects, fetched: fetched, digest: digest))
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+
+    /// Puts a change in the inbox, for the Macs.
+    private func send(_ change: CloudBoard.Change) {
+        guard sample == nil, let database = CloudBoard.container?.privateCloudDatabase else { return }
+        Task {
+            do {
+                if !inboxReady {
+                    _ = try await database.modifyRecordZones(saving: [CKRecordZone(zoneID: CloudBoard.inboxZoneID)], deleting: [])
+                    inboxReady = true
+                }
+                _ = try await database.save(CloudBoard.record(for: change))
+            } catch {
+                problem = String(localized: "Couldn't send that to your Macs: \(Self.describe(error))")
+            }
+        }
+    }
+
+    /// softwarefactory://project/<id>, from a widget, or softwarefactory://today.
     func open(_ url: URL) {
-        guard url.scheme == "softwarefactory", url.host() == "project" else { return }
-        opened = url.pathComponents.dropFirst().first
+        guard url.scheme == "softwarefactory" else { return }
+        if url.host() == "today" { opened = "today" }
+        if url.host() == "project" { opened = url.pathComponents.dropFirst().first }
     }
 
     private static func describe(_ error: Error) -> String {

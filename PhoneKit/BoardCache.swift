@@ -6,6 +6,7 @@ nonisolated enum BoardCache {
     struct Saved: Codable, Sendable {
         var projects: [Project]
         var fetched: Date
+        var digest: Digest?
     }
 
     private static var url: URL? {

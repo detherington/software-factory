@@ -49,12 +49,14 @@ final class PhoneShare {
     @ObservationIgnored private var hasAlertsSubscription = false
     /// What's in iCloud now, by project: the data last sent. Read from iCloud on the first send.
     @ObservationIgnored private var sent: [String: Data]?
+    @ObservationIgnored private var sentDigest: Data?
     @ObservationIgnored private var state = Saved()
     @ObservationIgnored private var otherMacsInput: Date?
     @ObservationIgnored private var lastPresenceWrite = Date.distantPast
     @ObservationIgnored private let log = Logger(subsystem: "com.darrell.softwarefactory", category: "phone")
-    /// `-FactoryPhoneIgnoresPresence YES`: alert as if you were away from every Mac (for testing).
-    @ObservationIgnored private let ignoresPresence = UserDefaults.standard.bool(forKey: "FactoryPhoneIgnoresPresence")
+    /// `-FactoryPhoneIgnoresPresence YES`: alert, and send the digest, as if you were away from every
+    /// Mac (for testing).
+    @ObservationIgnored let pretendsAway = UserDefaults.standard.bool(forKey: "FactoryPhoneIgnoresPresence")
 
     /// The alerts this Mac saved, kept a day so they can be cleared away.
     private struct Saved: Codable {
@@ -133,6 +135,7 @@ final class PhoneShare {
                 return
             }
         }
+        await readInbox()
         await send()
         await sharePresence()
         if sendsAlerts {
@@ -176,6 +179,7 @@ final class PhoneShare {
                 for id in gone { sent?[id] = nil }
             }
             status = .shared(.now, count: payloads.count)
+            await sendDigest(to: database)
         } catch {
             log.error("Couldn't send the board: \(error.localizedDescription, privacy: .public)")
             status = .failed(Self.describe(error))
@@ -184,18 +188,25 @@ final class PhoneShare {
         }
     }
 
-    /// What iCloud has now, so a restart doesn't send every project again.
+    /// Today's digest, as the Today screen shows it, for the iPhone's: apart from the board, so a
+    /// refusal (production before its schema has the Digest type) leaves the board's sending alone.
+    private func sendDigest(to database: CKDatabase) async {
+        guard let digest = try? CloudBoard.encode(DigestStore.shared.digest(now: .now)), digest != sentDigest else { return }
+        do {
+            _ = try await database.modifyRecords(saving: [CloudBoard.digestRecord(digest)], deleting: [], savePolicy: .allKeys)
+            sentDigest = digest
+        } catch {
+            log.error("Couldn't send the digest: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// What iCloud has now, so a restart doesn't send every project again: the projects (the digest
+    /// is a record of its own, not one to delete).
     private func readSent(from database: CKDatabase) async throws -> [String: Data] {
         var found: [String: Data] = [:]
-        var token: CKServerChangeToken?
-        var more = true
-        while more {
-            let changes = try await database.recordZoneChanges(inZoneWith: CloudBoard.zoneID, since: token)
-            for case .success(let modification) in changes.modificationResultsByID.values {
-                found[modification.record.recordID.recordName] = modification.record[CloudBoard.Field.data] as? Data ?? Data()
-            }
-            token = changes.changeToken
-            more = changes.moreComing
+        for record in try await CloudBoard.allRecords(in: CloudBoard.zoneID, from: database) {
+            let data = record[CloudBoard.Field.data] as? Data ?? Data()
+            if record.recordType == CloudBoard.digestType { sentDigest = data } else { found[record.recordID.recordName] = data }
         }
         return found
     }
@@ -208,7 +219,7 @@ final class PhoneShare {
         guard let database else { return }
         let now = Date.now
         let lastInput = [now.addingTimeInterval(-Presence.secondsSinceInput), otherMacsInput].compactMap { $0 }.max() ?? now
-        guard ignoresPresence || now.timeIntervalSince(lastInput) >= Self.awayAfter else { return }
+        guard pretendsAway || now.timeIntervalSince(lastInput) >= Self.awayAfter else { return }
         let store = ProjectStore.shared
         var alerts: [CKRecord] = []
         for project in store.projects.values where !project.hidden {
@@ -244,6 +255,62 @@ final class PhoneShare {
             save()
         } catch {
             log.error("Couldn't send alerts: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    // MARK: - Changes from the iPhone
+
+    /// Folds in what was changed on the iPhone (to-dos, snoozes), then clears it from the inbox. One
+    /// for a project this Mac doesn't have stays for another Mac, a day at most.
+    private func readInbox() async {
+        guard let database else { return }
+        guard let changes = try? await CloudBoard.fetchChanges(from: database), !changes.isEmpty else { return }
+        let store = ProjectStore.shared
+        var done: [CKRecord.ID] = []
+        for (id, change) in changes {
+            switch change.kind {
+            case .todo:
+                guard let todo = change.todo, let project = change.project else { done.append(id); continue }
+                let here = store.projectID(matching: project, name: change.projectName ?? project, repo: nil)
+                if store.mergeTodo(todo, into: here) || Date.now.timeIntervalSince(todo.updated) > 86_400 { done.append(id) }
+            case .snooze:
+                if let nudge = change.nudge, let snooze = change.snooze { DigestStore.shared.applySnooze(snooze, to: nudge) }
+                done.append(id)
+            }
+        }
+        guard !done.isEmpty else { return }
+        _ = try? await database.modifyRecords(saving: [], deleting: done, atomically: false)
+        log.info("Folded in \(done.count) changes from the iPhone")
+    }
+
+    // MARK: - For the digest
+
+    /// When you last used any of your Macs, as far as this one knows.
+    var lastUsedAnyMac: Date {
+        if pretendsAway { return .distantPast }
+        return [Date.now.addingTimeInterval(-Presence.secondsSinceInput), otherMacsInput].compactMap { $0 }.max() ?? .now
+    }
+
+    /// Whether this Mac can reach the iPhone with an alert.
+    var reachesPhone: Bool { database != nil && isOn && sendsAlerts }
+
+    /// An alert of the Mac's own making (the morning digest), named so two Macs sending it make one.
+    func sendAlert(id: String, title: String, body: String, project: String) async -> Bool {
+        guard let database else { return false }
+        do {
+            let (saved, _) = try await database.modifyRecords(saving: [CloudBoard.alert(id: id, title: title, body: body, project: project)],
+                                                            deleting: [], savePolicy: .ifServerRecordUnchanged, atomically: false)
+            switch saved.values.first {
+            case .success: break
+            case .failure(let error) where (error as? CKError)?.code == .serverRecordChanged: break
+            default: return false
+            }
+            state.alerts[id] = .now
+            save()
+            return true
+        } catch {
+            log.error("Couldn't send the digest to the iPhone: \(error.localizedDescription, privacy: .public)")
+            return false
         }
     }
 
@@ -304,13 +371,31 @@ final class PhoneShare {
     #if DEBUG
     /// Reads the board back and lists the subscriptions; `testAlert` saves an alert the iPhone should
     /// show, and `forget` deletes a record by name (a test alert, after).
-    func debugCheck(testAlert: Bool = false, forget: String? = nil) async -> [String: String] {
+    func debugCheck(testAlert: Bool = false, forget: String? = nil, change: String? = nil) async -> [String: String] {
         guard let database else { return ["error": "not entitled"] }
         var result: [String: String] = ["status": "\(status)"]
         do {
-            result["projects"] = "\(try await CloudBoard.fetchProjects(from: database).count)"
+            let board = try await CloudBoard.fetchBoard(from: database)
+            result["projects"] = "\(board.projects.count)"
+            result["digest"] = board.digest.map { "\($0.title) | \($0.waiting.count) waiting, \($0.todos.count) old to-do groups" } ?? "none"
         } catch {
             result["read"] = "\(error)"
+        }
+        result["inbox"] = (try? await CloudBoard.fetchChanges(from: database)).map { "\($0.count) waiting" } ?? "no inbox"
+        // ?change=<project id>: a to-do and a snooze, as the iPhone would send them.
+        if let change, let project = ProjectStore.shared[change] {
+            do {
+                _ = try await database.modifyRecordZones(saving: [CKRecordZone(zoneID: CloudBoard.inboxZoneID)], deleting: [])
+                let now = Date.now
+                let todo = CloudBoard.Change(kind: .todo, project: project.id, projectName: project.name,
+                                             todo: Todo(text: "Added on the iPhone", created: now, updated: now))
+                let snooze = CloudBoard.Change(kind: .snooze, nudge: "loose|\(project.id)",
+                                               snooze: DigestState.Snooze(until: now.addingTimeInterval(86_400), set: now))
+                _ = try await database.modifyRecords(saving: [try CloudBoard.record(for: todo), try CloudBoard.record(for: snooze)], deleting: [])
+                result["change"] = "sent a to-do and a snooze for \(project.id)"
+            } catch {
+                result["change"] = "\(error)"
+            }
         }
         if let subscriptions = try? await database.allSubscriptions() {
             result["subscriptions"] = subscriptions.map(\.subscriptionID).sorted().joined(separator: ", ")

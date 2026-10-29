@@ -2,25 +2,45 @@ import SwiftUI
 
 struct PhoneRoot: View {
     @Environment(PhoneBoard.self) private var board
-    @State private var path: [String] = []
+    @State private var tab = Tab.board
+    @State private var boardPath: [String] = []
+    @State private var todayPath: [String] = []
+
+    enum Tab { case board, today }
 
     var body: some View {
         #if DEBUG
-        if UserDefaults.standard.bool(forKey: "FactoryWidgetGallery") { WidgetGallery() } else { stack }
+        if UserDefaults.standard.bool(forKey: "FactoryWidgetGallery") { WidgetGallery() } else { tabs }
         #else
-        stack
+        tabs
         #endif
     }
 
-    private var stack: some View {
-        NavigationStack(path: $path) {
-            BoardView()
-                .navigationDestination(for: String.self) { ProjectView(id: $0) }
+    private var tabs: some View {
+        TabView(selection: $tab) {
+            SwiftUI.Tab("Board", systemImage: "square.grid.2x2.fill", value: Tab.board) {
+                NavigationStack(path: $boardPath) {
+                    BoardView()
+                        .navigationDestination(for: String.self) { ProjectView(id: $0) }
+                }
+            }
+            .badge(board.count(.waiting) + board.count(.yourCall))
+            SwiftUI.Tab("Today", systemImage: "sun.horizon.fill", value: Tab.today) {
+                NavigationStack(path: $todayPath) {
+                    TodayView()
+                        .navigationDestination(for: String.self) { ProjectView(id: $0) }
+                }
+            }
         }
-        // A widget's project, or an alert's.
+        // A widget's project, or an alert's; the digest's opens Today.
         .onChange(of: board.opened, initial: true) { _, id in
             guard let id else { return }
-            path = [id]
+            if id == "today" {
+                tab = .today
+            } else {
+                tab = .board
+                boardPath = [id]
+            }
             board.opened = nil
         }
     }

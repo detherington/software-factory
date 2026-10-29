@@ -76,6 +76,7 @@ struct TodayContent: View {
             guard digests.isOn else { return String(localized: "The morning digest is off. Turn it on in Settings › Morning Digest.") }
             if let sent = digest.sent {
                 let at = sent.formatted(date: .omitted, time: .shortened)
+                if digests.state.record?.toPhone == true { return String(localized: "Today's digest went to your iPhone at \(at): nobody was at a Mac.") }
                 if let machine = digests.state.record?.machine, machine != store.machineName {
                     return String(localized: "Today's digest went out at \(at) on \(machine).")
                 }

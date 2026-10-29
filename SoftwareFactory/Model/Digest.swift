@@ -2,8 +2,8 @@ import Foundation
 
 /// Something the morning digest reminds you of: a session waiting on you, a block, work left in a
 /// folder, to-dos nobody has touched. Snoozing hides it for a day or a week.
-struct Nudge: Identifiable, Hashable, Encodable, Sendable {
-    enum Kind: String, Encodable, Sendable { case waiting, blocked, looseEnds, todos }
+struct Nudge: Identifiable, Hashable, Codable, Sendable {
+    enum Kind: String, Codable, Sendable { case waiting, blocked, looseEnds, todos }
 
     /// The same while the thing it's about stays the same: a question asked again is a new one.
     var id: String
@@ -22,7 +22,7 @@ struct Nudge: Identifiable, Hashable, Encodable, Sendable {
 }
 
 /// The morning digest: the days since the last one, in numbers, and what's been left.
-struct Digest: Encodable, Sendable {
+struct Digest: Codable, Sendable {
     /// The start of each day it covers, oldest first: yesterday, or every day since the last digest.
     var days: [Date]
     var summary: PassportSummary
@@ -178,6 +178,8 @@ struct DigestState: Codable, Sendable {
         /// When it was sent; nil when there was nothing to say.
         var sent: Date?
         var machine: String?
+        /// Sent to the iPhone, since nobody was at a Mac.
+        var toPhone: Bool?
     }
 
     /// A snoozed nudge: until when, and when that was decided, so the latest decision wins across Macs.

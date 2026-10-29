@@ -86,23 +86,8 @@ struct ProjectView: View {
             }
 
             let todos = project.openTodos
-            if !todos.isEmpty {
-                SectionLabel(String(localized: "To do"), trailing: "\(todos.count)")
-                Card(padding: 16) {
-                    ForEach(todos) { todo in
-                        HStack(alignment: .firstTextBaseline, spacing: 10) {
-                            Image(systemName: "circle")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(Switchyard.textTertiary)
-                            Text(todo.text)
-                                .font(.headline(16, weight: .medium))
-                                .foregroundStyle(Switchyard.text)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        .padding(.vertical, 2)
-                    }
-                }
-            }
+            SectionLabel(String(localized: "To do"), trailing: todos.isEmpty ? nil : "\(todos.count)")
+            TodoList(project: project, todos: todos)
 
             if !project.events.isEmpty {
                 SectionLabel(String(localized: "Timeline"))
@@ -139,6 +124,61 @@ struct ProjectView: View {
                     .foregroundStyle(Switchyard.textSecondary)
             }
         }
+    }
+}
+
+/// Your to-dos for a project: add one, tick one off, or delete one (press and hold). Your Macs pick
+/// up the change within moments.
+private struct TodoList: View {
+    let project: Project
+    let todos: [Todo]
+    @Environment(PhoneBoard.self) private var board
+    @State private var draft = ""
+    @FocusState private var adding: Bool
+
+    var body: some View {
+        Card(padding: 16) {
+            HStack(spacing: 10) {
+                Image(systemName: "plus.circle.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Switchyard.accent)
+                TextField(String(localized: "Add something to tackle…"), text: $draft)
+                    .font(.headline(16, weight: .medium))
+                    .foregroundStyle(Switchyard.text)
+                    .focused($adding)
+                    .submitLabel(.done)
+                    .onSubmit(add)
+            }
+            .padding(.vertical, 4)
+            ForEach(todos) { todo in
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Button { board.setTodo(todo, done: true, in: project) } label: {
+                        Image(systemName: "circle")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Switchyard.textTertiary)
+                            .frame(width: 24, height: 24)
+                            .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(String(localized: "Done"))
+                    Text(todo.text)
+                        .font(.headline(16, weight: .medium))
+                        .foregroundStyle(Switchyard.text)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(.vertical, 2)
+                .contextMenu {
+                    Button("Done", systemImage: "checkmark") { board.setTodo(todo, done: true, in: project) }
+                    Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = todo.text }
+                    Button("Delete", systemImage: "trash", role: .destructive) { board.deleteTodo(todo, in: project) }
+                }
+            }
+        }
+    }
+
+    private func add() {
+        board.addTodo(draft, to: project)
+        draft = ""
     }
 }
 

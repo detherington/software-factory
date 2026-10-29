@@ -243,19 +243,22 @@ Settings › Morning Digest sets the time and the days (every day, or weekdays),
 
 ## iPhone
 
-The iPhone app, Factory, shows the board your Macs keep. It reads; the Macs write.
+The iPhone app, Factory, shows the board your Macs keep, and Today.
 
 - **The board.** Counts, what needs you and what's under way as cards in their state's color, and every other project. Tap one for what's happening, its progress, sessions, to-dos and timeline. Pull to refresh.
+- **To-dos.** Add one on a project's page, tick one off, or press and hold to delete it. Your Macs pick up the change within about half a minute, and it shows on the phone at once.
+- **Today.** The same as on the Mac: the days since the last digest in numbers, then what's waiting on you, loose ends and old to-dos. Tick old to-dos off, or snooze any item for a day or a week, on every Mac.
 - **Widgets.** *Board* (small, medium, large): what needs you, what's working and the latest of the rest. *Needs You* (Lock Screen): how many projects need you, and which. Tap a project to open it.
+- **The morning digest.** If nobody has used any of your Macs by three hours after its time (noon, for 9:00), it goes to the iPhone as an alert instead, and opens Today. Today on the Mac then says so.
 - **Alerts.** When something has needed you for two minutes (a question, a permission, your call, a block) and nobody has used any of your Macs for five, the iPhone gets a notification with Claude's message. Each Mac shares when you last used it in `iCloud Drive/Software Factory/Presence/`. Settings › iPhone turns alerts off.
-- **How the board gets there.** Each Mac with Settings › iPhone on saves every project, a few seconds after it changes, to your private CloudKit database (container `iCloud.com.darrell.softwarefactory`, zone `Board`), without folder paths and with its latest 25 events. Alerts are records too, which a subscription shows on the iPhone as notifications. The Mac makes that subscription when it's missing: iCloud has refused the iPhone's own save of it while taking the Mac's, and a subscription belongs to the iCloud account, not the device that made it. If the iPhone can't set up alerts, its board says why. Only a copy signed with the team can do this: `scripts/install.sh` signs with it when Xcode can, and otherwise signs locally, without iCloud.
+- **How the board gets there.** Each Mac with Settings › iPhone on saves every project, a few seconds after it changes, to your private CloudKit database (container `iCloud.com.darrell.softwarefactory`, zone `Board`), without folder paths and with its latest 25 events, and today's digest beside them. What you change on the iPhone goes to the `Inbox` zone; a Mac folds each change into the board (the later change to a to-do wins, as between Macs) and deletes it. Alerts are records too, which a subscription shows on the iPhone as notifications. The Mac makes that subscription when it's missing: iCloud has refused the iPhone's own save of it while taking the Mac's, and a subscription belongs to the iCloud account, not the device that made it. If the iPhone can't set up alerts, its board says why. Only a copy signed with the team can do this: `scripts/install.sh` signs with it when Xcode can, and otherwise signs locally, without iCloud.
 - **Two environments.** Debug builds use the container's development environment and Release builds (installed, TestFlight) production, so testing never touches the real board.
 
 Setting it up, once:
 
 1. **Set up signing in Xcode.** With the developer account in Xcode › Settings › Accounts, open `SoftwareFactory.xcodeproj` and build the SoftwareFactory scheme for My Mac, then the SoftwareFactoryPhone scheme for Any iOS Device. Xcode makes the iCloud container, the app group and the profiles, and links them to the app IDs. Only Xcode, or the developer website, can link them; after that, command-line builds and the App Store Connect API key can make and renew profiles.
 2. **Install the Mac app** with `scripts/install.sh`.
-3. **Deploy the CloudKit schema.** A Debug build sending the board and an alert creates the record types in the development environment, and making the alerts subscription there creates the hidden fields its title, sound and project need. Then in [CloudKit Console](https://icloud.developer.apple.com), deploy the schema to production, even when it lists no changes: the subscription's fields go with it unlisted. Until they do, production refuses the subscription ("Cannot create or modify field 'notif_sound_name'").
+3. **Deploy the CloudKit schema.** A Debug build sending the board, the digest and an alert creates the record types in the development environment (`POST /api/debug/phone?change=<project>` adds the Inbox's, as the iPhone would), and making the alerts subscription there creates the hidden fields its title, sound and project need. Then in [CloudKit Console](https://icloud.developer.apple.com), deploy the schema to production, even when it lists no changes: the subscription's fields go with it unlisted. Until they do, production refuses the subscription ("Cannot create or modify field 'notif_sound_name'").
 4. **Make the app in App Store Connect** (iOS, bundle ID `com.darrell.softwarefactory.ios`). `scripts/testflight.sh` builds it and uploads it for TestFlight; install it from there.
 
 ## The `factory` command
@@ -373,7 +376,7 @@ To run a test copy beside the real one without touching your board:
 
 Debug builds add `POST /api/debug/snapshot?dir=/some/folder`, which renders the board, the first three projects, Activity and the menu bar panel to PNGs. Screen capture isn't allowed from a shell here; glass controls don't show in the snapshots.
 
-`POST /api/debug/phone?out=<file>` reads the board back from iCloud and lists the subscriptions; `&alert=1` also saves a test alert, and `&forget=<record>` deletes one. A Debug build uses the development environment; build it with `FACTORY_CLOUDKIT_ENVIRONMENT=Production` and launch it with `-FactoryPhone NO` to look at production without sending a test board to your iPhone.
+`POST /api/debug/phone?out=<file>` reads the board and digest back from iCloud, counts the inbox and lists the subscriptions; `&alert=1` also saves a test alert, `&forget=<record>` deletes one, and `&change=<project id>` sends a to-do and a snooze as the iPhone would. `-FactoryPhoneIgnoresPresence YES` acts as if you're away from every Mac, for alerts and for sending the digest to the iPhone. A Debug build uses the development environment; build it with `FACTORY_CLOUDKIT_ENVIRONMENT=Production` and launch it with `-FactoryPhone NO` to look at production without sending a test board to your iPhone.
 
 - **`SoftwareFactory/`** is the app:
   - `App/`: scenes, navigation, snapshots.
@@ -384,6 +387,6 @@ Debug builds add `POST /api/debug/snapshot?dir=/some/folder`, which renders the 
   - `Views/`: the screens.
 - **`Factory/`** is the `factory` command. It's embedded at `Contents/MacOS/factory`.
 - **`Shared/`** holds what the app and the command share: `ClaudeSetup.swift` installs the hooks, and `ProjectPath.swift` finds a folder's repository.
-- **`Phone/`** is the iPhone app and **`PhoneWidgets/`** its widgets. They share the Mac app's model and design files, and **`PhoneKit/`**: `CloudBoard.swift` (the board's records, also in the Mac app) and `BoardCache.swift` (the board the app leaves for its widgets). In the Simulator, a Debug build takes `-FactorySampleBoard <file>` (a JSON array of projects) in place of iCloud, and `-FactoryWidgetGallery YES` draws every widget.
+- **`Phone/`** is the iPhone app and **`PhoneWidgets/`** its widgets. They share the Mac app's model and design files, and **`PhoneKit/`**: `CloudBoard.swift` (the board's records, also in the Mac app) and `BoardCache.swift` (the board the app leaves for its widgets). In the Simulator, a Debug build takes `-FactorySampleBoard <file>` (a JSON array of projects) and `-FactorySampleDigest <file>` (`GET /api/digest`) in place of iCloud, and `-FactoryWidgetGallery YES` draws every widget.
 - **`Config/`**: entitlements, and the TestFlight export options.
 - **`scripts/`**: `install.sh`; `testflight.sh`, which uploads the iPhone app; and `make-icon.swift`, which renders both apps' icons.
