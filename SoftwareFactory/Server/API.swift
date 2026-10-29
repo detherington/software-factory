@@ -173,6 +173,16 @@ enum API {
                 // Sends today's digest now, whatever the time and whether or not it went out already.
                 Task { await DigestStore.shared.send(now: .now, force: true) }
                 return .json(Data("{\"ok\":true}".utf8))
+            case ("POST", "api/debug/phone"):
+                // Reads the board back from iCloud and lists the subscriptions; ?alert=1 saves a test
+                // alert, ?forget=<record> deletes one. The results go to ?out=<file>.
+                let out = URL(fileURLWithPath: request.query["out"] ?? NSTemporaryDirectory() + "phone.json")
+                let (alert, forget) = (request.query["alert"] == "1", request.query["forget"])
+                Task {
+                    let result = await PhoneShare.shared.debugCheck(testAlert: alert, forget: forget)
+                    try? JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys]).write(to: out)
+                }
+                return .json(Data("{\"ok\":true}".utf8))
             case ("POST", "api/debug/read-passport"):
                 Task { await PassportStore.shared.read() }
                 return .json(Data("{\"ok\":true}".utf8))

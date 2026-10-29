@@ -20,6 +20,8 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>FactoryCloudKitContainer</key>
+	<string>$(FACTORY_CLOUDKIT_CONTAINER)</string>
 	<key>FactorySourceFolder</key>
 	<string>$(SRCROOT)</string>
 	<key>LSApplicationCategoryType</key>

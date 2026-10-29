@@ -6,8 +6,20 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 xcodegen generate --quiet
-xcodebuild -project SoftwareFactory.xcodeproj -scheme SoftwareFactory -configuration Release \
-  -derivedDataPath build/DerivedData -destination 'platform=macOS' build -quiet
+
+# Signed with the team in project.yml, so the app can send the board to the iPhone through iCloud.
+# Xcode makes or renews the profile with the account in Xcode › Settings › Accounts; without one it
+# uses the profile it has. A Mac that can't sign with the team gets a copy signed locally, which
+# works the same but doesn't send the board to the iPhone. Why signing failed goes in build/signing.log.
+build() {
+  xcodebuild -project SoftwareFactory.xcodeproj -scheme SoftwareFactory -configuration Release \
+    -derivedDataPath build/DerivedData -destination 'platform=macOS' "$@" build -quiet
+}
+mkdir -p build
+if ! build -allowProvisioningUpdates >build/signing.log 2>&1 && ! build >>build/signing.log 2>&1; then
+  echo "Couldn't sign with the team (build/signing.log has why), so this copy won't send the board to the iPhone."
+  build CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= CODE_SIGN_ENTITLEMENTS=
+fi
 
 built="build/DerivedData/Build/Products/Release/Software Factory.app"
 app="$HOME/Applications/Software Factory.app"

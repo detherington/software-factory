@@ -7,15 +7,26 @@ settings:
   base:
     SWIFT_VERSION: "6.0"
     DEAD_CODE_STRIPPING: YES
-    # A local tool that never leaves this Mac: signed to run locally, so it builds without an
-    # Apple Developer account in Xcode. Not sandboxed, because it reads ~/.claude and runs git.
-    CODE_SIGN_STYLE: Manual
-    CODE_SIGN_IDENTITY: "-"
-    DEVELOPMENT_TEAM: ""
+    # Apple Developer Team ID (Xcode ▸ Settings ▸ Accounts), as in Emanata. Signing with it lets the
+    # Mac app write the board to iCloud for the iPhone app. scripts/install.sh falls back to signing
+    # locally, without iCloud, on a Mac that can't sign with the team. Not sandboxed, because it reads
+    # ~/.claude and runs git.
+    DEVELOPMENT_TEAM: 8B29CDK832
+    CODE_SIGN_STYLE: Automatic
     ENABLE_HARDENED_RUNTIME: NO
+    # The board's CloudKit container. Debug builds use its development environment, so testing never
+    # touches the real board on your phone; Release builds (installed, TestFlight) use production.
+    FACTORY_CLOUDKIT_CONTAINER: iCloud.com.darrell.softwarefactory
+    FACTORY_CLOUDKIT_ENVIRONMENT: Production
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
     MACOSX_DEPLOYMENT_TARGET: "26.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+    # Where the iPhone app leaves the board for its widgets.
+    FACTORY_APP_GROUP: group.com.darrell.softwarefactory
+  configs:
+    Debug:
+      FACTORY_CLOUDKIT_ENVIRONMENT: Development
 targets:
   SoftwareFactory:
     type: application
@@ -23,6 +34,7 @@ targets:
     sources:
       - path: SoftwareFactory
       - path: Shared
+      - path: PhoneKit/CloudBoard.swift
     dependencies:
       # The `factory` command-line tool ships inside the app (Contents/MacOS/factory);
       # Settings › Command-Line Tool links it into ~/.local/bin.
@@ -35,6 +47,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.darrell.softwarefactory
         PRODUCT_NAME: Software Factory
+        CODE_SIGN_ENTITLEMENTS: Config/SoftwareFactory-macOS.entitlements
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         GENERATE_INFOPLIST_FILE: NO
@@ -63,6 +76,7 @@ targets:
         NSHumanReadableCopyright: ""
         # The clone this copy was built from, which Settings › Updates pulls and builds.
         FactorySourceFolder: $(SRCROOT)
+        FactoryCloudKitContainer: $(FACTORY_CLOUDKIT_CONTAINER)
   factory:
     type: tool
     platform: macOS
@@ -73,3 +87,77 @@ targets:
       base:
         PRODUCT_NAME: factory
         PRODUCT_BUNDLE_IDENTIFIER: com.darrell.softwarefactory.cli
+  # The iPhone app: the board your Macs keep, read from iCloud, with widgets and alerts. It goes to
+  # TestFlight with scripts/testflight.sh.
+  SoftwareFactoryPhone:
+    type: application
+    platform: iOS
+    sources:
+      - path: Phone
+      - path: PhoneWidgets/WidgetViews.swift
+      - path: PhoneKit
+      - path: SoftwareFactory/Model/Project.swift
+      - path: SoftwareFactory/Model/Formats.swift
+      - path: SoftwareFactory/Model/AppStoreStatus.swift
+      - path: SoftwareFactory/Design/Theme.swift
+      - path: SoftwareFactory/Design/Components.swift
+      - path: Shared/JSONDates.swift
+    dependencies:
+      - target: SoftwareFactoryPhoneWidgets
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.darrell.softwarefactory.ios
+        PRODUCT_NAME: Factory
+        CODE_SIGN_ENTITLEMENTS: Config/SoftwareFactory-iOS.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: NO
+    info:
+      path: Phone/Info.plist
+      properties:
+        CFBundleDisplayName: Factory
+        CFBundleName: Factory
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen: {}
+        UIUserInterfaceStyle: Dark
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UIBackgroundModes: [remote-notification]
+        ITSAppUsesNonExemptEncryption: false
+        # softwarefactory://project/<id>: the widgets' links.
+        CFBundleURLTypes:
+          - CFBundleURLName: com.darrell.softwarefactory.ios
+            CFBundleURLSchemes: [softwarefactory]
+        FactoryCloudKitContainer: $(FACTORY_CLOUDKIT_CONTAINER)
+        FactoryAppGroup: $(FACTORY_APP_GROUP)
+  SoftwareFactoryPhoneWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: PhoneWidgets
+      - path: PhoneKit
+      - path: SoftwareFactory/Model/Project.swift
+      - path: SoftwareFactory/Model/Formats.swift
+      - path: SoftwareFactory/Model/AppStoreStatus.swift
+      - path: SoftwareFactory/Design/Theme.swift
+      - path: SoftwareFactory/Design/Components.swift
+      - path: Shared/JSONDates.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.darrell.softwarefactory.ios.widgets
+        PRODUCT_NAME: FactoryWidgets
+        CODE_SIGN_ENTITLEMENTS: Config/SoftwareFactoryWidgets-iOS.entitlements
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: NO
+    info:
+      path: PhoneWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: Factory
+        CFBundleName: FactoryWidgets
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+        FactoryCloudKitContainer: $(FACTORY_CLOUDKIT_CONTAINER)
+        FactoryAppGroup: $(FACTORY_APP_GROUP)

@@ -1,4 +1,3 @@
-import CoreGraphics
 import Foundation
 import Observation
 import OSLog
@@ -128,7 +127,7 @@ final class DigestStore {
         await readOtherMacs()
         guard isOn, isDue(at: now), !isSending else { return }
         // When you're at the Mac: you've moved the mouse or typed in the last two minutes.
-        guard ignoresPresence || Self.secondsSinceInput < 120 else { return }
+        guard ignoresPresence || Presence.secondsSinceInput < 120 else { return }
         await send(now: now)
     }
 
@@ -164,12 +163,6 @@ final class DigestStore {
         Notifier.shared.post(Notifier.Notice(key: "digest|\(keys.key(for: now))", kind: "digest", title: digest.title, body: digest.body,
                                              project: "", screen: "today"),
                              sound: needsYou)
-    }
-
-    /// Seconds since the last mouse or keyboard input on this Mac. No permission is needed to ask.
-    private static var secondsSinceInput: Double {
-        let types: [CGEventType] = [.mouseMoved, .keyDown, .leftMouseDown, .rightMouseDown, .scrollWheel]
-        return types.map { CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: $0) }.min() ?? .infinity
     }
 
     // MARK: - Other Macs

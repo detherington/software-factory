@@ -58,6 +58,7 @@ struct SettingsView: View {
 
             NotificationsSection()
             DigestSection()
+            PhoneSection()
             AppStoreSection()
             UpdatesSection()
             SyncSection()
@@ -236,6 +237,34 @@ private struct NotificationsSection: View {
             Text("Each notifies once, when it happens. Click one to open the session's chat in Claude Desktop, or the board. Several at once arrive as one, and a \"needs you\" leaves Notification Center once it's answered.")
         }
         .task { await notifier.refreshAuthorization() }
+    }
+}
+
+/// The board on your iPhone, through iCloud.
+private struct PhoneSection: View {
+    @Environment(PhoneShare.self) private var phone
+
+    var body: some View {
+        @Bindable var phone = phone
+        Section {
+            Toggle("Show the board on your iPhone", isOn: $phone.isOn)
+            Toggle("Alert my iPhone when something needs me and I'm away", isOn: $phone.sendsAlerts)
+                .disabled(!phone.isOn)
+            LabeledContent("iCloud") {
+                switch phone.status {
+                case .off: Text("Off").foregroundStyle(Switchyard.textTertiary)
+                case .starting: Text("Starting…").foregroundStyle(Switchyard.textTertiary)
+                case .shared(let date, let count):
+                    Text("\(count) projects, \(date.formatted(date: .omitted, time: .shortened))").foregroundStyle(Switchyard.textSecondary)
+                case .unavailable(let reason): Text(reason).foregroundStyle(Switchyard.textTertiary).multilineTextAlignment(.trailing)
+                case .failed(let reason): Text(reason).foregroundStyle(Swatch.ember.color).multilineTextAlignment(.trailing)
+                }
+            }
+        } header: {
+            Text("iPhone")
+        } footer: {
+            Text("The Software Factory iPhone app and its widgets show this board, from your private iCloud database. An alert comes when something has needed you for two minutes and nobody has used any of your Macs for five.")
+        }
     }
 }
 

@@ -439,6 +439,22 @@ final class ProjectStore {
                 .sorted { ($0.lastActivity ?? .distantPast) > ($1.lastActivity ?? .distantPast) }
             self?.desktopChats = chats
             self?.chatsBySession = Dictionary(chats.compactMap { chat in chat.cliSessionID.map { ($0, chat) } }, uniquingKeysWith: { a, _ in a })
+            self?.putAwayArchivedQuestions()
+        }
+    }
+
+    /// A question in a chat you've archived isn't waiting for you anymore.
+    private func putAwayArchivedQuestions() {
+        for project in local.values {
+            for session in project.sessions where session.state.needsYou && session.ask != nil && chat(for: session)?.isArchived == true {
+                update(project.id) { p in
+                    guard let index = p.sessions.firstIndex(where: { $0.id == session.id }) else { return }
+                    p.sessions[index].state = .idle
+                    p.sessions[index].since = .now
+                    p.sessions[index].message = nil
+                    p.sessions[index].ask = nil
+                }
+            }
         }
     }
 
@@ -699,6 +715,7 @@ final class ProjectStore {
         }
         projects = merged
         Notifier.shared.evaluate(merged, now: .now)
+        PhoneShare.shared.boardChanged()
     }
 
     /// Which project here another Mac's project is.

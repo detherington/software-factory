@@ -465,7 +465,7 @@ extension Project {
     /// What's happening, in a line.
     func headline(at now: Date) -> String? {
         if let live = liveSessions(at: now).first {
-            if [.waiting, .yourCall, .blocked].contains(live.state), let message = live.message { return message }
+            if [.waiting, .yourCall, .blocked].contains(live.state), let message = live.message ?? live.ask { return message }
             if let task = live.task { return task }
         }
         // What broke, or what shipped, says more than the task before it.

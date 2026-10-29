@@ -35,6 +35,7 @@ A status board for every coding project on this Mac: what's being worked on, wha
 
   Clicking one opens the session's Claude Desktop chat when it has one, and the board otherwise; **Open Chat** and **Show on Board** do the same from the notification. Notifications are grouped by project, several arriving together come as one, and a "needs you" leaves Notification Center once it's answered. Sessions on other Macs notify too, labeled with the Mac (switch that off in Settings). Only what happened in the last two minutes notifies, so opening the app, or a synced board catching up, doesn't replay old news.
 - **TestFlight and the App Store.** With an App Store Connect API key, each app's card shows its latest build and App Store version: "1.0 · In testing", "1.0 · Waiting for review", "1.1 · On the App Store". Its project page lists recent builds for each platform. A build that fails processing or a rejected version turns the card Blocked, and a version going live counts as Shipped. See [App Store Connect](#app-store-connect).
+- **On your iPhone.** The Factory app shows the board, with widgets for the Home Screen and Lock Screen, and alerts you when something needs you while you're away from your Macs. See [iPhone](#iphone).
 - **Menu bar and Dock.** A raised hand and a count in the menu bar when something needs you; a bolt while work is under way. The Dock icon shows how many projects need you.
 - **One board on all your Macs.** Run Software Factory on each Mac and turn on Settings › Sync. Each board shares its projects through iCloud Drive and shows the others' with its own, labeled with each Mac's name.
 - **Or report from a Mac that doesn't run it.** Turn on Settings › Other Macs and paste one command into Terminal on the other Mac. Its Claude Code sessions then report over the network, labeled with that Mac's name.
@@ -163,7 +164,7 @@ Each Mac can run its own board, and they share through iCloud Drive:
 
 How it works:
 
-- **Files.** Each board writes its own Mac's projects to `iCloud Drive/Software Factory/Boards/<this Mac's id>.json`, at most every five seconds, and reads the other Macs' files every five seconds. A Mac only ever writes its own file, so the two never conflict. Saved prompts (`Prompts/`), the Passport's numbers (`Stats/`) and the digest's sends and snoozes (`Digest/`) are shared the same way, in folders beside `Boards/`. No Apple Developer account or iCloud entitlement is involved: iCloud Drive is just a folder to the app.
+- **Files.** Each board writes its own Mac's projects to `iCloud Drive/Software Factory/Boards/<this Mac's id>.json`, at most every five seconds, and reads the other Macs' files every five seconds. A Mac only ever writes its own file, so the two never conflict. Saved prompts (`Prompts/`), the Passport's numbers (`Stats/`), the digest's sends and snoozes (`Digest/`) and when you last used each Mac (`Presence/`) are shared the same way, in folders beside `Boards/`. No Apple Developer account or iCloud entitlement is involved: iCloud Drive is just a folder to the app.
 - **Merging.**
   - A project on several Macs (same id, repository or name) is one card, and each session and timeline entry carries its Mac's name.
   - For what was reported (state, task, note, milestone, progress, steps, version), the newest report wins, wherever it was made.
@@ -239,6 +240,23 @@ Settings › Morning Digest sets the time and the days (every day, or weekdays),
 - **Snoozing.** The moon button on each item snoozes it for a day or a week, on every Mac. **Wake Them**, at the foot of Today, brings back everything snoozed.
 - **When it comes.** At the time you set, it waits until you've used the Mac in the last two minutes, so it arrives when you sit down. With nothing worked on and nothing left, it doesn't come.
 - **One Mac sends it.** With Sync on, each Mac shares when it last sent a digest, and what's snoozed, in `iCloud Drive/Software Factory/Digest/<this Mac's id>.json`. Once one Mac has sent today's digest, the others don't.
+
+## iPhone
+
+The iPhone app, Factory, shows the board your Macs keep. It reads; the Macs write.
+
+- **The board.** Counts, what needs you and what's under way as cards in their state's color, and every other project. Tap one for what's happening, its progress, sessions, to-dos and timeline. Pull to refresh.
+- **Widgets.** *Board* (small, medium, large): what needs you, what's working and the latest of the rest. *Needs You* (Lock Screen): how many projects need you, and which. Tap a project to open it.
+- **Alerts.** When something has needed you for two minutes (a question, a permission, your call, a block) and nobody has used any of your Macs for five, the iPhone gets a notification with Claude's message. Each Mac shares when you last used it in `iCloud Drive/Software Factory/Presence/`. Settings › iPhone turns alerts off.
+- **How the board gets there.** Each Mac with Settings › iPhone on saves every project, a few seconds after it changes, to your private CloudKit database (container `iCloud.com.darrell.softwarefactory`, zone `Board`), without folder paths and with its latest 25 events. Alerts are records too, which a subscription shows on the iPhone as notifications. The Mac makes that subscription when it's missing: iCloud has refused the iPhone's own save of it while taking the Mac's, and a subscription belongs to the iCloud account, not the device that made it. If the iPhone can't set up alerts, its board says why. Only a copy signed with the team can do this: `scripts/install.sh` signs with it when Xcode can, and otherwise signs locally, without iCloud.
+- **Two environments.** Debug builds use the container's development environment and Release builds (installed, TestFlight) production, so testing never touches the real board.
+
+Setting it up, once:
+
+1. **Set up signing in Xcode.** With the developer account in Xcode › Settings › Accounts, open `SoftwareFactory.xcodeproj` and build the SoftwareFactory scheme for My Mac, then the SoftwareFactoryPhone scheme for Any iOS Device. Xcode makes the iCloud container, the app group and the profiles, and links them to the app IDs. Only Xcode, or the developer website, can link them; after that, command-line builds and the App Store Connect API key can make and renew profiles.
+2. **Install the Mac app** with `scripts/install.sh`.
+3. **Deploy the CloudKit schema.** A Debug build sending the board and an alert creates the record types in the development environment, and making the alerts subscription there creates the hidden fields its title, sound and project need. Then in [CloudKit Console](https://icloud.developer.apple.com), deploy the schema to production, even when it lists no changes: the subscription's fields go with it unlisted. Until they do, production refuses the subscription ("Cannot create or modify field 'notif_sound_name'").
+4. **Make the app in App Store Connect** (iOS, bundle ID `com.darrell.softwarefactory.ios`). `scripts/testflight.sh` builds it and uploads it for TestFlight; install it from there.
 
 ## The `factory` command
 
@@ -338,7 +356,7 @@ The reply is the project as the board shows it: `state` and `label` ("Needs you"
 
 ## Data
 
-The board lives in `~/Library/Application Support/Software Factory/projects.json`, the Passport's record in `passport.json`, saved prompts in `prompts.json` and the digest's last send and snoozes in `digest.json` beside it. Each project keeps its last 200 events and up to 12 sessions. Sessions nobody has heard from in three days are dropped.
+The board lives in `~/Library/Application Support/Software Factory/projects.json`, the Passport's record in `passport.json`, saved prompts in `prompts.json` the digest's last send and snoozes in `digest.json` and the alerts sent to the iPhone in `phone.json` beside it. Each project keeps its last 200 events and up to 12 sessions. Sessions nobody has heard from in three days are dropped.
 
 ## Development
 
@@ -355,6 +373,8 @@ To run a test copy beside the real one without touching your board:
 
 Debug builds add `POST /api/debug/snapshot?dir=/some/folder`, which renders the board, the first three projects, Activity and the menu bar panel to PNGs. Screen capture isn't allowed from a shell here; glass controls don't show in the snapshots.
 
+`POST /api/debug/phone?out=<file>` reads the board back from iCloud and lists the subscriptions; `&alert=1` also saves a test alert, and `&forget=<record>` deletes one. A Debug build uses the development environment; build it with `FACTORY_CLOUDKIT_ENVIRONMENT=Production` and launch it with `-FactoryPhone NO` to look at production without sending a test board to your iPhone.
+
 - **`SoftwareFactory/`** is the app:
   - `App/`: scenes, navigation, snapshots.
   - `Design/`: Switchyard.
@@ -364,4 +384,6 @@ Debug builds add `POST /api/debug/snapshot?dir=/some/folder`, which renders the 
   - `Views/`: the screens.
 - **`Factory/`** is the `factory` command. It's embedded at `Contents/MacOS/factory`.
 - **`Shared/`** holds what the app and the command share: `ClaudeSetup.swift` installs the hooks, and `ProjectPath.swift` finds a folder's repository.
-- **`scripts/`**: `install.sh`, and `make-icon.swift`, which renders the app icon.
+- **`Phone/`** is the iPhone app and **`PhoneWidgets/`** its widgets. They share the Mac app's model and design files, and **`PhoneKit/`**: `CloudBoard.swift` (the board's records, also in the Mac app) and `BoardCache.swift` (the board the app leaves for its widgets). In the Simulator, a Debug build takes `-FactorySampleBoard <file>` (a JSON array of projects) in place of iCloud, and `-FactoryWidgetGallery YES` draws every widget.
+- **`Config/`**: entitlements, and the TestFlight export options.
+- **`scripts/`**: `install.sh`; `testflight.sh`, which uploads the iPhone app; and `make-icon.swift`, which renders both apps' icons.

@@ -42,6 +42,7 @@ extension View {
             .environment(PassportStore.shared)
             .environment(PromptStore.shared)
             .environment(DigestStore.shared)
+            .environment(PhoneShare.shared)
             .tint(Switchyard.accent)
             .preferredColorScheme(.dark)
     }
@@ -74,6 +75,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         PassportStore.shared.start()
         PromptStore.shared.start()
         DigestStore.shared.start()
+        PhoneShare.shared.start()
         PaletteController.shared.updateHotKey()
         // A new version may listen to more hook events: bring the hooks this app installed up to date.
         _ = try? ClaudeSetup.upgradeIfNeeded()

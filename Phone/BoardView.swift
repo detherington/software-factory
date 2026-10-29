@@ -1,0 +1,213 @@
+import SwiftUI
+
+struct PhoneRoot: View {
+    @Environment(PhoneBoard.self) private var board
+    @State private var path: [String] = []
+
+    var body: some View {
+        #if DEBUG
+        if UserDefaults.standard.bool(forKey: "FactoryWidgetGallery") { WidgetGallery() } else { stack }
+        #else
+        stack
+        #endif
+    }
+
+    private var stack: some View {
+        NavigationStack(path: $path) {
+            BoardView()
+                .navigationDestination(for: String.self) { ProjectView(id: $0) }
+        }
+        // A widget's project, or an alert's.
+        .onChange(of: board.opened, initial: true) { _, id in
+            guard let id else { return }
+            path = [id]
+            board.opened = nil
+        }
+    }
+}
+
+/// What needs you, what's under way, and every other project, as on the Mac.
+struct BoardView: View {
+    @Environment(PhoneBoard.self) private var board
+
+    var body: some View {
+        let now = board.now
+        let live = board.live
+        let resting = board.resting
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                ScreenHeader(label: now.formatted(.dateTime.weekday(.wide).month(.wide).day()), title: title)
+                Counts()
+                    .padding(.bottom, 4)
+                if let problem = board.problem {
+                    Card(padding: 18) {
+                        Text(problem)
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(Switchyard.textSecondary)
+                    }
+                }
+                if !live.isEmpty {
+                    SectionLabel(String(localized: "Now"))
+                    ForEach(live) { project in
+                        NavigationLink(value: project.id) { LiveTile(project: project, now: now) }
+                            .buttonStyle(.plain)
+                    }
+                }
+                if !resting.isEmpty {
+                    SectionLabel(String(localized: "Projects"), trailing: "\(resting.count)")
+                    Card(padding: 16) {
+                        ForEach(resting) { project in
+                            NavigationLink(value: project.id) { ProjectRow(project: project, now: now) }
+                                .buttonStyle(.plain)
+                        }
+                    }
+                }
+                if board.projects.isEmpty, board.problem == nil {
+                    Card(padding: 20) {
+                        Text(board.isRefreshing ? "Fetching your board…" : "No projects yet.")
+                            .font(.headline(20, weight: .semibold))
+                            .foregroundStyle(Switchyard.text)
+                        Text("Your Macs send the board here once Settings › iPhone is on in Software Factory.")
+                            .foregroundStyle(Switchyard.textSecondary)
+                    }
+                }
+                footer(now: now)
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 30)
+        }
+        .scrollIndicators(.hidden)
+        .refreshable { await board.refresh() }
+        .background(Switchyard.background.ignoresSafeArea())
+        .toolbar(.hidden, for: .navigationBar)
+    }
+
+    private var title: String {
+        if board.count(.waiting) + board.count(.yourCall) > 0 { return String(localized: "Your move") }
+        if board.count(.working) > 0 { return String(localized: "Hard at work") }
+        if board.count(.background) > 0 { return String(localized: "Ticking over") }
+        if board.count(.blocked) > 0 { return String(localized: "Stuck") }
+        return String(localized: "All quiet")
+    }
+
+    private func footer(now: Date) -> some View {
+        Group {
+            if let fetched = board.fetched {
+                Text("Updated \(Formats.ago(fetched, from: now)) ago. Pull to refresh.")
+            }
+        }
+        .font(.system(size: 12, weight: .medium))
+        .foregroundStyle(Switchyard.textTertiary)
+        .padding(.top, 8)
+    }
+}
+
+/// Counts, Passport style.
+private struct Counts: View {
+    @Environment(PhoneBoard.self) private var board
+
+    var body: some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .leading), count: 3), alignment: .leading, spacing: 10) {
+            stat(board.count(.waiting), String(localized: "Needs you"), .amber)
+            stat(board.count(.yourCall), String(localized: "Your call"), .tangerine)
+            stat(board.count(.working), String(localized: "Working"), .violet)
+            stat(board.count(.background), String(localized: "Background"), .sky)
+            stat(board.count(.blocked), String(localized: "Blocked"), .ember)
+            stat(board.board.count, String(localized: "Projects"), nil)
+        }
+    }
+
+    private func stat(_ value: Int, _ label: String, _ swatch: Swatch?) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("\(value)")
+                .font(.display(48, weight: .heavy))
+                .foregroundStyle(value == 0 ? Switchyard.textTertiary : swatch?.color ?? Switchyard.text)
+                .rollingDigits()
+            TrackedLabel(label, size: 10, color: Switchyard.textTertiary)
+                .lineLimit(1)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// A live project as a flood of its state's color.
+private struct LiveTile: View {
+    let project: Project
+    let now: Date
+
+    var body: some View {
+        let state = project.state(at: now)
+        let steps = project.displaySteps(at: now)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                TrackedLabel(project.code, size: 11, color: Switchyard.ink.opacity(0.72))
+                Spacer(minLength: 8)
+                StateChip(state: state, mode: project.mode(at: now), since: Formats.ago(project.stateSince(at: now), from: now), onFlood: true)
+            }
+            Text(project.name)
+                .font(.display(38, weight: .black))
+                .foregroundStyle(Switchyard.ink)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+            if let headline = project.headline(at: now) {
+                Text(headline)
+                    .font(.headline(17, weight: .semibold))
+                    .foregroundStyle(Switchyard.ink.opacity(0.85))
+                    .lineLimit(3)
+                    .multilineTextAlignment(.leading)
+            }
+            if !steps.isEmpty {
+                Strip.steps(steps, color: Switchyard.ink.opacity(0.75), track: Switchyard.ink.opacity(0.18), height: 6)
+                    .padding(.top, 2)
+            }
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(state.swatch.gradient, in: .rect(cornerRadius: Switchyard.cardRadius, style: .continuous))
+        .contentShape(.rect)
+    }
+}
+
+/// "TDR  Tachyon Drifter  3 d", like the Mac's sidebar.
+private struct ProjectRow: View {
+    let project: Project
+    let now: Date
+
+    var body: some View {
+        let state = project.state(at: now)
+        HStack(spacing: 12) {
+            Text(project.code)
+                .font(.display(22, weight: .heavy))
+                .foregroundStyle(Switchyard.text)
+                .frame(width: 48, alignment: .leading)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(project.name)
+                    .font(.headline(17, weight: .semibold))
+                    .foregroundStyle(Switchyard.textSecondary)
+                    .lineLimit(1)
+                if let line = project.headline(at: now) {
+                    Text(line)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Switchyard.textTertiary)
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 6)
+            if !project.openTodos.isEmpty {
+                Text("\(project.openTodos.count)")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Switchyard.textTertiary)
+            }
+            if state != .idle {
+                Circle().fill(state.swatch.color).frame(width: 8, height: 8)
+                    .accessibilityLabel(state.label)
+            }
+            Text(Formats.ago(project.lastActivity, from: now))
+                .font(.display(17, weight: .bold))
+                .foregroundStyle(Switchyard.textTertiary)
+                .frame(minWidth: 34, alignment: .trailing)
+        }
+        .padding(.vertical, 5)
+        .contentShape(.rect)
+    }
+}

@@ -44,12 +44,21 @@ extension ProjectStore {
 
             switch event {
             case "SessionStart":
-                // A compaction carries on mid-task; anything else starts fresh.
-                if payload["source"] as? String == "compact" {
+                switch payload["source"] as? String {
+                case "compact":
+                    // A compaction carries on mid-task.
                     s.action = nil
                     s.activity = nil
-                } else {
+                case "resume":
+                    // Claude Desktop starts a session's process again when you open its chat: the
+                    // question its turn ended with still waits for you. Anything else stopped with it.
+                    if s.ask == nil || !s.state.needsYou { set(.idle) }
+                    s.action = nil
+                    s.activity = nil
+                default:
                     set(.idle)
+                    s.ask = nil
+                    s.askBlocks = nil
                 }
 
             case "UserPromptSubmit":
@@ -179,6 +188,15 @@ extension ProjectStore {
                 if p.reported == .working { p.reported = .idle; p.reportedAt = now; p.lastReport = now }
 
             case "SessionEnd":
+                // Claude Desktop stops a chat's process while it waits for you, and starts it again
+                // when you open the chat: a question its turn ended with still waits for you then. A
+                // /clear, or anything else, ends with the process.
+                if payload["reason"] as? String != "clear", s.ask != nil, s.state.needsYou,
+                   p.sessions.contains(where: { $0.id == sessionID }) {
+                    s.background = nil
+                    s.action = nil
+                    break
+                }
                 p.sessions.removeAll { $0.id == sessionID }
                 if p.sessions.isEmpty, p.reported == .working { p.reported = .idle; p.reportedAt = now; p.lastReport = now }
                 p.lastActivity = now
