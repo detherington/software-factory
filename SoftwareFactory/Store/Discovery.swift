@@ -13,6 +13,7 @@ nonisolated enum Discovery {
         /// Newest first.
         var commits: [Commit]
         var looseEnds: LooseEnds?
+        var bundleID: String?
     }
 
     static func scan() async -> [Found] {
@@ -71,7 +72,28 @@ nonisolated enum Discovery {
         let readme = readmeSummary(in: root)
         let (branch, commits) = gitHistory(in: root)
         return Found(root: root, lastActivity: lastActivity, kind: kind(of: root, readme: readme), readme: readme,
-                     branch: branch, repo: remote(in: root), commits: commits, looseEnds: looseEnds(in: root))
+                     branch: branch, repo: remote(in: root), commits: commits, looseEnds: looseEnds(in: root),
+                     bundleID: bundleID(in: root))
+    }
+
+    /// The app's bundle ID: of those the XcodeGen spec or Xcode project declares, the shortest that
+    /// isn't a test target's. Extensions add to the app's ("….widgets"), so the app's is shortest.
+    private static func bundleID(in root: String) -> String? {
+        let fm = FileManager.default
+        var sources = [root + "/project.yml"]
+        if let entries = try? fm.contentsOfDirectory(atPath: root) {
+            sources += entries.filter { $0.hasSuffix(".xcodeproj") }.map { root + "/" + $0 + "/project.pbxproj" }
+        }
+        var found: Set<String> = []
+        for file in sources {
+            guard let text = try? String(contentsOfFile: file, encoding: .utf8) else { continue }
+            for match in text.matches(of: /PRODUCT_BUNDLE_IDENTIFIER\s*[:=]\s*"?([A-Za-z0-9.\-]+)"?/) {
+                found.insert(String(match.1))
+            }
+        }
+        return found
+            .filter { !$0.localizedCaseInsensitiveContains("test") }
+            .min { $0.count != $1.count ? $0.count < $1.count : $0 < $1 }
     }
 
     /// Uncommitted files and commits ahead of the upstream, from one `git status`.

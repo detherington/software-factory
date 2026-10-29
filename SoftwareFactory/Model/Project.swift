@@ -356,6 +356,9 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
     var looseEnds: [LooseEnds]?
     /// Your to-do list for it.
     var todos: [Todo]?
+    /// Its app's bundle ID, from its Xcode project, and where the app stands in App Store Connect.
+    var bundleID: String?
+    var appStore: AppStoreStatus?
     var created: Date
     /// The newest sign of life from anywhere: a report, a hook, a transcript, a commit.
     var lastActivity: Date
@@ -399,6 +402,8 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
         lastCommit = try c.decodeIfPresent(Commit.self, forKey: .lastCommit)
         looseEnds = try c.decodeIfPresent([LooseEnds].self, forKey: .looseEnds)
         todos = try c.decodeIfPresent([Todo].self, forKey: .todos)
+        bundleID = try c.decodeIfPresent(String.self, forKey: .bundleID)
+        appStore = try c.decodeIfPresent(AppStoreStatus.self, forKey: .appStore)
         let created = try c.decodeIfPresent(Date.self, forKey: .created) ?? .now
         self.created = created
         reportedAt = try c.decodeIfPresent(Date.self, forKey: .reportedAt) ?? created

@@ -585,6 +585,7 @@ final class ProjectStore {
                 if let readme = item.readme { p.readme = readme }
                 if let branch = item.branch { p.branch = branch }
                 p.looseEnds = item.looseEnds.map { [$0] }
+                if let bundleID = item.bundleID { p.bundleID = bundleID }
                 if p.repo == nil { p.repo = item.repo }
                 let known = Set(p.events.compactMap(\.ref))
                 var added = false

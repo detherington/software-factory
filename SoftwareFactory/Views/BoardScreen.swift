@@ -233,6 +233,9 @@ struct ProjectCard: View {
                     }
                     .padding(.top, 2)
                 }
+                if let status = project.appStore {
+                    HStack(spacing: 6) { AppStoreChips(status: status) }
+                }
                 if !steps.isEmpty {
                     Strip.steps(steps, color: state == .idle ? Switchyard.textSecondary : state.swatch.color, track: Switchyard.surfaceRaised)
                         .padding(.vertical, 4)

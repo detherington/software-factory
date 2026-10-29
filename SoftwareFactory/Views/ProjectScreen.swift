@@ -58,6 +58,9 @@ struct ProjectContent: View {
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 380), spacing: 14, alignment: .top)], alignment: .leading, spacing: 14) {
                 TodoCard(project: project)
+                if let status = project.appStore {
+                    AppStoreCard(status: status, now: now)
+                }
                 if let fraction = project.fraction(at: now) {
                     ProgressCard(project: project, fraction: fraction, steps: steps, swatch: state == .idle ? .slate : state.swatch)
                 }
@@ -333,6 +336,61 @@ private struct SessionsCard: View {
         }
         .padding(.top, 6)
         .contentShape(.rect)
+    }
+}
+
+/// The app in App Store Connect: its App Store versions and latest TestFlight builds.
+private struct AppStoreCard: View {
+    let status: AppStoreStatus
+    let now: Date
+
+    var body: some View {
+        Card(padding: 20) {
+            HStack(alignment: .firstTextBaseline) {
+                TrackedLabel(String(localized: "App Store Connect"), size: 11, color: Switchyard.textTertiary)
+                Spacer()
+                TrackedLabel(String(localized: "Checked \(Formats.ago(status.checked, from: now))"), size: 10, color: Switchyard.textTertiary)
+            }
+            Text(status.name)
+                .font(.headline(20, weight: .bold))
+                .foregroundStyle(Switchyard.text)
+            ForEach(status.versions) { version in
+                row(symbol: "storefront", title: "\(version.version) · \(StoreText.platform(version.platform))",
+                    detail: version.changedAt.map { Formats.ago($0, from: now) }, chip: version.label, swatch: version.swatch)
+            }
+            if !status.builds.isEmpty {
+                TrackedLabel(String(localized: "TestFlight"), size: 10, color: Switchyard.textTertiary).padding(.top, 6)
+                ForEach(status.builds) { build in
+                    row(symbol: "paperplane.fill", title: "\(build.version) (\(build.number)) · \(StoreText.platform(build.platform))",
+                        detail: Formats.ago(build.uploaded, from: now), chip: build.label, swatch: build.swatch)
+                }
+            }
+            Button(String(localized: "Open in App Store Connect")) {
+                Reveal.url("https://appstoreconnect.apple.com/apps/\(status.appID)/testflight")
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(Switchyard.accent)
+            .padding(.top, 4)
+        }
+    }
+
+    private func row(symbol: String, title: String, detail: String?, chip: String, swatch: Swatch?) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Image(systemName: symbol)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Switchyard.textTertiary)
+                .frame(width: 16)
+            Text(title)
+                .font(.code(12))
+                .foregroundStyle(Switchyard.textSecondary)
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            if let detail {
+                Text(detail).font(.display(15, weight: .bold)).foregroundStyle(Switchyard.textTertiary)
+            }
+            StatusChip(text: chip, swatch: swatch)
+        }
     }
 }
 

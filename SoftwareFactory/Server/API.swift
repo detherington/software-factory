@@ -134,6 +134,9 @@ enum API {
             case ("POST", "api/debug/update"):
                 Updater.shared.update()
                 return .json(Data("{\"ok\":true}".utf8))
+            case ("POST", "api/debug/check-app-store"):
+                Task { await AppStoreWatcher.shared.check() }
+                return .json(Data("{\"ok\":true}".utf8))
             case ("GET", "api/debug/notices"):
                 return try encode(Notifier.shared.recent)
             case ("POST", "api/debug/snapshot"):
@@ -297,6 +300,9 @@ struct ProjectDTO: Encodable {
     var looseEnds: [LooseEnds]
     /// Your to-dos: still to do, then done.
     var todos: [Todo]
+    var bundleID: String?
+    /// Its app in App Store Connect: TestFlight builds and App Store versions.
+    var appStore: AppStoreStatus?
     var hidden: Bool
     /// The Claude Desktop chat to open for it, on this Mac: its title and claude:// link.
     var chat: Chat?
@@ -336,6 +342,8 @@ struct ProjectDTO: Encodable {
         mode = p.mode(at: now)
         looseEnds = p.openLooseEnds
         todos = p.openTodos + p.doneTodos
+        bundleID = p.bundleID
+        appStore = p.appStore
         hidden = p.hidden
         chat = ProjectStore.shared.bestChat(for: p).flatMap { chat in chat.url.map { Chat(title: chat.title, url: $0.absoluteString) } }
         events = limit > 0 ? Array(p.events.prefix(limit)) : nil

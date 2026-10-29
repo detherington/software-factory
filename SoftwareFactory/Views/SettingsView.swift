@@ -56,6 +56,7 @@ struct SettingsView: View {
             }
 
             NotificationsSection()
+            AppStoreSection()
             UpdatesSection()
             SyncSection()
             OtherMacsSection(message: $message)
@@ -130,6 +131,71 @@ struct SettingsView: View {
         }
         hooksInstalled = ClaudeSetup.isInstalled()
         toolLinked = CommandLineTool.isLinked
+    }
+}
+
+/// The App Store Connect API key the board reads TestFlight and App Store status with.
+private struct AppStoreSection: View {
+    @Environment(AppStoreWatcher.self) private var watcher
+    @Environment(ProjectStore.self) private var store
+    @State private var note: String?
+
+    var body: some View {
+        @Bindable var watcher = watcher
+        Section {
+            TextField("Key ID", text: $watcher.keyID)
+            TextField("Issuer ID", text: $watcher.issuerID)
+            LabeledContent("Key file") {
+                HStack {
+                    Text(watcher.keyPath.isEmpty ? String(localized: "None") : (watcher.keyPath as NSString).abbreviatingWithTildeInPath)
+                        .font(.code(11))
+                        .foregroundStyle(Switchyard.textSecondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer()
+                    Button("Choose…") { chooseKey() }
+                }
+            }
+            LabeledContent("Status") {
+                HStack {
+                    if watcher.isChecking {
+                        ProgressView().controlSize(.small)
+                    } else if let problem = watcher.problem {
+                        Text(problem).foregroundStyle(Swatch.ember.color).lineLimit(2)
+                    } else if let last = watcher.lastCheck {
+                        let apps = store.projects.values.filter { $0.appStore != nil }.count
+                        let ago = RelativeDateTimeFormatter().localizedString(for: min(last, store.now), relativeTo: store.now)
+                        Text("\(apps) apps · checked \(ago)").foregroundStyle(Switchyard.textSecondary)
+                    } else {
+                        Text(watcher.credentials == nil ? "Not set up" : "Not checked yet").foregroundStyle(Switchyard.textSecondary)
+                    }
+                    Spacer()
+                    Button("Check Now") { Task { await watcher.check() } }
+                        .disabled(watcher.credentials == nil)
+                }
+            }
+            Button("Fill In from ~/.zshrc") {
+                let found = watcher.fillFromShellProfile()
+                note = found.isEmpty
+                    ? String(localized: "No ASC_KEY_ID, ASC_ISSUER_ID or ASC_KEY_PATH exports in ~/.zshrc.")
+                    : String(localized: "Filled in from \(found.joined(separator: ", ")).")
+                Task { await watcher.check() }
+            }
+            if let note { Text(note).font(.callout).foregroundStyle(Switchyard.textSecondary) }
+        } header: {
+            Text("App Store Connect")
+        } footer: {
+            Text("An App Store Connect API key lets the board show each app's TestFlight builds and App Store versions, and notify when a build is ready to test. It only reads. Apps are matched to projects by bundle ID. One Mac is enough: the status syncs.")
+        }
+    }
+
+    private func chooseKey() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = []
+        panel.allowsOtherFileTypes = true
+        panel.message = String(localized: "Choose your App Store Connect API key (AuthKey_….p8)")
+        panel.directoryURL = URL(fileURLWithPath: NSHomeDirectory()).appending(path: ".appstoreconnect/private_keys")
+        if panel.runModal() == .OK, let url = panel.url { watcher.keyPath = url.path }
     }
 }
 

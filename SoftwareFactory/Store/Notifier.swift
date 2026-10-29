@@ -14,7 +14,7 @@ final class Notifier {
     static let shared = Notifier()
 
     enum Kind: String, CaseIterable, Identifiable {
-        case needsYou, yourCall, blocked, backgroundDone, shipped, finished
+        case needsYou, yourCall, blocked, backgroundDone, shipped, buildReady, finished
 
         var id: Self { self }
 
@@ -25,6 +25,7 @@ final class Notifier {
             case .blocked: String(localized: "Blocked")
             case .backgroundDone: String(localized: "Background work finished")
             case .shipped: String(localized: "Shipped")
+            case .buildReady: String(localized: "TestFlight build ready")
             case .finished: String(localized: "Turn finished, no question")
             }
         }
@@ -171,6 +172,17 @@ final class Notifier {
                 lastJobs[session.id] = jobs
             }
 
+            // TestFlight builds that became ready to test: one notice a build number, for all its platforms.
+            let ready = (project.appStore?.builds ?? []).filter { $0.readyAt != nil }
+            let newlyReady = ready.filter { !seen.contains("\(project.id)|build|\($0.id)") && fresh($0.readyAt!) }
+            for (number, builds) in Dictionary(grouping: newlyReady, by: \.number).sorted(by: { $0.key < $1.key }) where isEnabled(.buildReady) {
+                var notice = notice(.buildReady, key: "\(project.id)|build|\(builds[0].id)", project: project, session: nil, place: nil)
+                notice.title = String(localized: "\(project.name) build \(number) is ready to test")
+                notice.body = StoreText.builds(builds)
+                notices.append((notice, false, false))
+            }
+            for build in ready { seen.insert("\(project.id)|build|\(build.id)") }
+
             // A release, or a block reported for the project.
             if project.reported == .done || project.reported == .blocked {
                 let kind: Kind = project.reported == .done ? .shipped : .blocked
@@ -222,6 +234,7 @@ final class Notifier {
         case .blocked: (String(localized: "\(name) is blocked"), session?.message ?? project.note ?? "")
         case .backgroundDone: (String(localized: "\(name): background work finished"), "")
         case .shipped: (String(localized: "\(name) shipped"), project.note ?? project.task ?? "")
+        case .buildReady: (String(localized: "\(name): a TestFlight build is ready"), "")
         case .finished: (String(localized: "\(name) finished a turn"), session?.task ?? "")
         }
         return Notice(key: key, kind: kind.rawValue, title: title, subtitle: place, body: body, project: project.id, session: session?.id)

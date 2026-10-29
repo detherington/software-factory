@@ -21,9 +21,11 @@ A status board for every coding project on this Mac: what's being worked on, wha
   - **Needs you, Your call, Blocked:** when a session enters one, with its message. These make a sound.
   - **Background work finished:** a background command or agent.
   - **Shipped:** a release.
+  - **TestFlight build ready:** a build has finished processing and can be tested.
   - **Turn finished:** a turn that ended without a question. Off by default.
 
   Clicking one opens the session's Claude Desktop chat when it has one, and the board otherwise; **Open Chat** and **Show on Board** do the same from the notification. Notifications are grouped by project, several arriving together come as one, and a "needs you" leaves Notification Center once it's answered. Sessions on other Macs notify too, labeled with the Mac (switch that off in Settings). Only what happened in the last two minutes notifies, so opening the app, or a synced board catching up, doesn't replay old news.
+- **TestFlight and the App Store.** With an App Store Connect API key, each app's card shows its latest build and App Store version: "1.0 · In testing", "1.0 · Waiting for review", "1.1 · On the App Store". Its project page lists recent builds for each platform. A build that fails processing or a rejected version turns the card Blocked, and a version going live counts as Shipped. See [App Store Connect](#app-store-connect).
 - **Menu bar and Dock.** A raised hand and a count in the menu bar when something needs you; a bolt while work is under way. The Dock icon shows how many projects need you.
 - **One board on all your Macs.** Run Software Factory on each Mac and turn on Settings › Sync. Each board shares its projects through iCloud Drive and shows the others' with its own, labeled with each Mac's name.
 - **Or report from a Mac that doesn't run it.** Turn on Settings › Other Macs and paste one command into Terminal on the other Mac. Its Claude Code sessions then report over the network, labeled with that Mac's name.
@@ -189,6 +191,15 @@ How it works:
 - **Milestones and blockers.** Run `~/.local/bin/factory instructions --install` on the other Mac too, so its Claude reports milestones, steps and blockers.
 - **Updating.** When this board's app gets a new version, run `factory update` on the other Mac to download its `factory` again.
 - **Stopping.** `factory disconnect` on the other Mac removes its connection, its hooks and its CLAUDE.md section.
+
+## App Store Connect
+
+Settings › App Store Connect takes an App Store Connect API key: its key ID, issuer ID and `.p8` file. **Fill In from ~/.zshrc** copies them from `export ASC_KEY_ID=…`, `ASC_ISSUER_ID` and `ASC_KEY_PATH` lines, the ones upload scripts use. The key file stays where it is; only its path is kept.
+
+- **Matching.** Apps are matched to projects by bundle ID, which the board reads from the project's `project.yml` or Xcode project: of the IDs there, the shortest that isn't a test target's.
+- **Checking.** Every ten minutes, and every two while a build is processing. It reads each app's latest builds (two per platform), their TestFlight state, and each platform's newest App Store version, plus the one on the App Store if that's older. It only reads.
+- **What it reports.** The first check only learns what's there. After that, a build ready to test goes in the timeline and notifies; a build needing export compliance goes in the timeline; a failed build or a rejection is a Blocked report; a version on the App Store is a Shipped report. A build or version on iOS and Mac at once is one piece of news.
+- **Other Macs.** Only one Mac needs the key: the status syncs with the rest of the board.
 
 ## The `factory` command
 

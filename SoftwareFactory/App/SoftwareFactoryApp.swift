@@ -38,6 +38,7 @@ extension View {
             .environment(Navigator.shared)
             .environment(Updater.shared)
             .environment(Notifier.shared)
+            .environment(AppStoreWatcher.shared)
             .tint(Switchyard.accent)
             .preferredColorScheme(.dark)
     }
@@ -66,6 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ServerController.shared.start(store: store)
         Updater.shared.startChecking()
         Notifier.shared.start(delegate: self)
+        AppStoreWatcher.shared.start()
         // A new version may listen to more hook events: bring the hooks this app installed up to date.
         _ = try? ClaudeSetup.upgradeIfNeeded()
         // Look for projects now and every few minutes: new folders, commits, READMEs.

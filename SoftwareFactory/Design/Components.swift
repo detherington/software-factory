@@ -165,6 +165,22 @@ struct LooseEndsChips: View {
     }
 }
 
+/// "1.0 · In testing" and "1.0 · Waiting for review": where an app's latest build and App Store version stand.
+struct AppStoreChips: View {
+    let status: AppStoreStatus
+
+    var body: some View {
+        if let build = status.leadBuild {
+            StatusChip(text: "\(build.version) · \(build.label)", swatch: build.swatch, symbol: "paperplane.fill")
+                .help(String(localized: "TestFlight: build \(build.number), \(StoreText.platform(build.platform))"))
+        }
+        if let version = status.leadVersion {
+            StatusChip(text: "\(version.version) · \(version.label)", swatch: version.swatch, symbol: "storefront")
+                .help(String(localized: "App Store, \(StoreText.platform(version.platform))"))
+        }
+    }
+}
+
 /// A filter chip: "All", "Live".
 struct FilterChip: View {
     let title: String

@@ -32,6 +32,7 @@
 		AD3B904994B882278CDAA605 /* BoardScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA150EE525FC15DC9D7EED22 /* BoardScreen.swift */; };
 		B213F8767BF74C55D9020DE8 /* Project.swift in Sources */ = {isa = PBXBuildFile; fileRef = 977DD354A7F535B809419220 /* Project.swift */; };
 		B741AF75DA70462818288866 /* Snapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3337D5EF310805146783373B /* Snapshot.swift */; };
+		B9BFCA1E6392CDF9E5E58F41 /* AppStoreConnect.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB027E930C7686E99F77789A /* AppStoreConnect.swift */; };
 		C445B28ECF6951B4E26C9E8D /* Formats.swift in Sources */ = {isa = PBXBuildFile; fileRef = A725CBC37F9F5C022AD6EF80 /* Formats.swift */; };
 		D11D59C4FE3D17DFB6796688 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9FB65952C565823C2FCA44E1 /* Assets.xcassets */; };
 		D37297CC51F0E97345C4FDFF /* ProjectPath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EBEF5BC108AC432DBE02618 /* ProjectPath.swift */; };
@@ -43,6 +44,7 @@
 		F7D95F73C224E6480C383666 /* Updater.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33DB23C4B4FA4805D6ADB56C /* Updater.swift */; };
 		FA87ABF0D4451D8A32D3AF7D /* MenuBarPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80B2D8F210A74B022475BCC7 /* MenuBarPanel.swift */; };
 		FCA22CA98817A65905AC4C7A /* ClaudeSetup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DE41ABF704054893FFCD764 /* ClaudeSetup.swift */; };
+		FF5531FFF6A872BBB1DC0533 /* AppStoreStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = D18724B419AD48D15C21398E /* AppStoreStatus.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -99,10 +101,12 @@
 		BE71367B597BD9790D2529D7 /* ProjectStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectStore.swift; sourceTree = "<group>"; };
 		C4875B8A7B9F867027B68E27 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		C8EBC3DB50A0488EA40BB9DD /* HTTPServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPServer.swift; sourceTree = "<group>"; };
+		D18724B419AD48D15C21398E /* AppStoreStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoreStatus.swift; sourceTree = "<group>"; };
 		DAEE6799FC5F4B9F63B79D08 /* Report.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Report.swift; sourceTree = "<group>"; };
 		E4F8FB5A083F5B981533DEE7 /* ProjectScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectScreen.swift; sourceTree = "<group>"; };
 		E592DD4274532C9C48A772D6 /* SoftwareFactoryApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoftwareFactoryApp.swift; sourceTree = "<group>"; };
 		EA150EE525FC15DC9D7EED22 /* BoardScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardScreen.swift; sourceTree = "<group>"; };
+		EB027E930C7686E99F77789A /* AppStoreConnect.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoreConnect.swift; sourceTree = "<group>"; };
 		F1A202333F926B3A9E29FFB0 /* TranscriptScan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptScan.swift; sourceTree = "<group>"; };
 		F85458AA116C9B36E96F9338 /* factory */ = {isa = PBXFileReference; includeInIndex = 0; path = factory; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -120,6 +124,7 @@
 		4939B81E2EE6A773CC597E6F /* Model */ = {
 			isa = PBXGroup;
 			children = (
+				D18724B419AD48D15C21398E /* AppStoreStatus.swift */,
 				0D94AE4565CC38EEEB3B6796 /* BoardMerge.swift */,
 				5BC811928D0E9E9C6867A97E /* ClaudeHook.swift */,
 				A725CBC37F9F5C022AD6EF80 /* Formats.swift */,
@@ -194,6 +199,7 @@
 		C0A78F51FCA70A845654103B /* Store */ = {
 			isa = PBXGroup;
 			children = (
+				EB027E930C7686E99F77789A /* AppStoreConnect.swift */,
 				40CE93F5B9EE1786B5009D1C /* DesktopChats.swift */,
 				8B75C7F6A32912C804347908 /* Discovery.swift */,
 				61BE9BF2EEF5C82BE66196EE /* Notifier.swift */,
@@ -367,6 +373,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				626DDE9F7894F8423FF1DB74 /* API.swift in Sources */,
+				B9BFCA1E6392CDF9E5E58F41 /* AppStoreConnect.swift in Sources */,
+				FF5531FFF6A872BBB1DC0533 /* AppStoreStatus.swift in Sources */,
 				6C85E6A75E4665E0BD5370F7 /* BoardMerge.swift in Sources */,
 				AD3B904994B882278CDAA605 /* BoardScreen.swift in Sources */,
 				0CD5D2850449555885881992 /* ClaudeHook.swift in Sources */,
