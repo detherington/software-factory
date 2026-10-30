@@ -19,6 +19,9 @@ struct HTTPResponse: Sendable {
     var status: Int
     var contentType = "application/json; charset=utf-8"
     var body: Data
+    /// A response that comes later: the real one, which the request waits for. It's cancelled if
+    /// the other end closes the connection first.
+    var later: (@Sendable () async -> HTTPResponse)?
 
     static func json(_ data: Data, status: Int = 200) -> HTTPResponse {
         HTTPResponse(status: status, body: data + Data("\n".utf8))
@@ -123,7 +126,8 @@ private final class HTTPConnection: @unchecked Sendable {
             }
             switch parse() {
             case .complete(let request):
-                Task { [self] in send(await handler(request)) }
+                let task = Task { [self] in send(await handler(request)) }
+                watchForClose(task)
             case .invalid(let response):
                 send(response)
             case .incomplete:
@@ -133,6 +137,14 @@ private final class HTTPConnection: @unchecked Sendable {
                     receive()
                 }
             }
+        }
+    }
+
+    /// A client that gives up on a response still being made (a hook whose prompt was answered
+    /// elsewhere) closes the connection: stop making it.
+    private func watchForClose(_ task: Task<Void, Never>) {
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 1) { [self] _, _, isComplete, error in
+            if isComplete || error != nil { task.cancel() } else { watchForClose(task) }
         }
     }
 

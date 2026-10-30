@@ -97,44 +97,61 @@ struct LiveCard: View {
         let state = project.state(at: now)
         let live = project.liveSessions(at: now)
         let steps = project.displaySteps(at: now)
-        Button { navigator.open(project.id) } label: {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .firstTextBaseline) {
-                    TrackedLabel(topLine(live: live), size: 11, color: Switchyard.ink.opacity(0.72))
-                        .lineLimit(1)
-                    Spacer(minLength: 8)
-                    StateChip(state: state, mode: project.mode(at: now), since: Formats.ago(project.stateSince(at: now), from: now),
-                              onFlood: true)
-                }
-                Text(project.name)
-                    .font(.display(50, weight: .black))
-                    .foregroundStyle(Switchyard.ink)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.55)
-                if let headline = project.headline(at: now) {
-                    Text(headline)
-                        .font(.headline(20, weight: .semibold))
-                        .foregroundStyle(Switchyard.ink)
-                        .lineLimit(3)
-                        .multilineTextAlignment(.leading)
-                }
-                if !steps.isEmpty {
-                    Strip.steps(steps, color: Switchyard.ink, track: Switchyard.ink.opacity(0.18))
-                        .padding(.top, 4)
-                } else if let fraction = project.fraction(at: now) {
-                    Strip.fraction(fraction, color: Switchyard.ink, track: Switchyard.ink.opacity(0.18))
-                        .padding(.top, 4)
-                }
-                Spacer(minLength: 4)
-                ThenBar(project: project, now: now)
-            }
-            .padding(18)
-            .frame(maxWidth: .infinity, minHeight: 268, alignment: .topLeading)
-            .background(state.swatch.gradient, in: .rect(cornerRadius: Switchyard.cardRadius, style: .continuous))
-            .contentShape(.rect(cornerRadius: Switchyard.cardRadius))
+        let permission = project.openPermission(at: now)
+        // A prompt's buttons can't sit inside the card's own button: with one, a tap opens the card.
+        if permission != nil {
+            content(state: state, live: live, steps: steps, permission: permission, now: now)
+                .onTapGesture { navigator.open(project.id) }
+                .accessibilityAddTraits(.isButton)
+                .contextMenu { ProjectMenuItems(project: project) }
+        } else {
+            Button { navigator.open(project.id) } label: { content(state: state, live: live, steps: steps, permission: nil, now: now) }
+                .buttonStyle(.plain)
+                .contextMenu { ProjectMenuItems(project: project) }
         }
-        .buttonStyle(.plain)
-        .contextMenu { ProjectMenuItems(project: project) }
+    }
+
+    private func content(state: ProjectState, live: [Session], steps: [Step], permission: (session: Session, ask: PermissionAsk)?, now: Date) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                TrackedLabel(topLine(live: live), size: 11, color: Switchyard.ink.opacity(0.72))
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                StateChip(state: state, mode: project.mode(at: now), since: Formats.ago(project.stateSince(at: now), from: now),
+                          onFlood: true)
+            }
+            Text(project.name)
+                .font(.display(50, weight: .black))
+                .foregroundStyle(Switchyard.ink)
+                .lineLimit(1)
+                .minimumScaleFactor(0.55)
+            if let headline = project.headline(at: now) {
+                Text(headline)
+                    .font(.headline(20, weight: .semibold))
+                    .foregroundStyle(Switchyard.ink)
+                    .lineLimit(3)
+                    .multilineTextAlignment(.leading)
+            }
+            if let ask = permission?.ask {
+                PermissionPrompt(ask: ask, onFlood: true, answerable: PermissionDesk.shared.isWaiting(for: ask.id)) { allow in
+                    store.answerPermission(ask.id, allow: allow, from: String(localized: "this Mac"))
+                }
+                .padding(.top, 4)
+            }
+            if !steps.isEmpty {
+                Strip.steps(steps, color: Switchyard.ink, track: Switchyard.ink.opacity(0.18))
+                    .padding(.top, 4)
+            } else if let fraction = project.fraction(at: now) {
+                Strip.fraction(fraction, color: Switchyard.ink, track: Switchyard.ink.opacity(0.18))
+                    .padding(.top, 4)
+            }
+            Spacer(minLength: 4)
+            ThenBar(project: project, now: now)
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, minHeight: 268, alignment: .topLeading)
+        .background(state.swatch.gradient, in: .rect(cornerRadius: Switchyard.cardRadius, style: .continuous))
+        .contentShape(.rect(cornerRadius: Switchyard.cardRadius))
     }
 
     private func topLine(live: [Session]) -> String {

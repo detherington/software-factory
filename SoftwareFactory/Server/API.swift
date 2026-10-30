@@ -14,7 +14,9 @@ import Foundation
 ///     PATCH  /api/projects/{id}/todos/{todo}   ticks or rewords one: {"done": true}, {"text": "…"}
 ///     DELETE /api/projects/{id}/todos/{todo}   deletes one ({todo}: its id, or its number in the open list)
 ///     POST   /api/todos                 adds one to the project a folder belongs to: {"path": "…", "text": "…"}
-///     POST   /api/hooks/claude          a Claude Code hook's input, unchanged
+///     POST   /api/hooks/claude          a Claude Code hook's input, unchanged; a PermissionRequest waits
+///                                       for an answer from the board, and gets Claude Code's decision
+///     POST   /api/permissions/{id}      answers a permission prompt: {"allow": true}
 ///     GET    /api/factory               the factory command, for setting up another Mac
 ///
 /// From this Mac, anything goes. Other Macs (with Settings › Other Macs on) send the token as
@@ -48,10 +50,11 @@ enum API {
         // the to-do as keys.
         let parts = request.path.split(separator: "/").map(String.init)
         let isProject = parts.count >= 3 && parts[0] == "api" && parts[1] == "projects"
+        let isPermission = parts.count == 3 && parts[0] == "api" && parts[1] == "permissions"
         let route = isProject
             ? (["api", "projects", "*"] + parts.dropFirst(3).enumerated().map { $0.offset == 1 ? "*" : $0.element }).joined(separator: "/")
-            : parts.joined(separator: "/")
-        let key = isProject ? parts[2] : ""
+            : isPermission ? "api/permissions/*" : parts.joined(separator: "/")
+        let key = isProject || isPermission ? parts[2] : ""
         let todoKey = parts.count == 5 ? parts[4] : ""
         do {
             switch (request.method, route) {
@@ -119,8 +122,17 @@ enum API {
                 guard let payload = try JSONSerialization.jsonObject(with: request.body) as? [String: Any] else {
                     return .error(400, "Send the hook's JSON input as the body.")
                 }
+                if payload["hook_event_name"] as? String == "PermissionRequest" {
+                    return permissionRequest(payload, entrypoint: request.headers["x-claude-entrypoint"], store: store, machine: machine)
+                }
                 let project = store.applyClaudeHook(payload, machine: machine)
                 return .json(Data("{\"ok\":true,\"project\":\(project.map { "\"\($0.id)\"" } ?? "null")}".utf8))
+            case ("POST", "api/permissions/*"):
+                guard let body = try JSONSerialization.jsonObject(with: request.body) as? [String: Any], let allow = body["allow"] as? Bool else {
+                    return .error(400, "Send {\"allow\": true} or {\"allow\": false}.")
+                }
+                let answered = store.answerPermission(key, allow: allow, from: machine ?? String(localized: "this Mac"))
+                return .json(Data("{\"answered\":\(answered)}".utf8))
             case ("GET", "api/prompts"):
                 // Saved prompts: those for every project, and each project's own.
                 return try encode(PromptStore.shared.all.filter { !$0.deleted })
@@ -195,7 +207,7 @@ enum API {
                 return .json(try JSONSerialization.data(withJSONObject: ["written": written], options: .prettyPrinted))
             #endif
             case (_, "api/projects/*"), (_, "api/projects"), (_, "api/prompts"), (_, "api/digest"), (_, "api/project"), (_, "api/report"), (_, "api/hooks/claude"),
-                 (_, "api/projects/*/todos"), (_, "api/projects/*/todos/*"), (_, "api/todos"):
+                 (_, "api/projects/*/todos"), (_, "api/projects/*/todos/*"), (_, "api/todos"), (_, "api/permissions/*"):
                 return .error(405, "\(request.method) isn't supported here.")
             default:
                 return .error(404, "Nothing at \(request.path). GET / lists the endpoints.")
@@ -208,6 +220,29 @@ enum API {
         } catch {
             return .error(400, error.localizedDescription)
         }
+    }
+
+    /// A permission prompt: the board shows it and, when it can answer it, holds the hook's request
+    /// open until it has. The response is Claude Code's decision, or nothing, to leave it to Claude.
+    private static func permissionRequest(_ payload: [String: Any], entrypoint header: String?, store: ProjectStore, machine: String?) -> HTTPResponse {
+        // Claude Code's entry point, from the curl hook's header or another Mac's factory command.
+        let entrypoint = payload["factory_entrypoint"] as? String ?? header.flatMap(\.trimmed)
+        let wait = PermissionDesk.shared.wait(tool: payload["tool_name"] as? String ?? "", entrypoint: entrypoint)
+        let until = wait.map { Date.now.addingTimeInterval($0) }
+        let project = store.applyClaudeHook(payload, machine: machine, permissionUntil: until)
+        let sessionID = payload["session_id"] as? String
+        guard let until, let ask = project?.sessions.first(where: { $0.id == sessionID })?.permission else { return .text("") }
+        PhoneShare.shared.permissionAsked()
+        var response = HTTPResponse.text("")
+        response.later = {
+            let answer = await PermissionDesk.shared.answer(for: ask.id, until: until)
+            guard let answer else {
+                await store.permissionLapsed(ask.id)
+                return .text("")
+            }
+            return .json(PermissionDesk.decision(answer))
+        }
+        return response
     }
 
     private static func isLocal(host: String?) -> Bool {

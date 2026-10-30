@@ -17,6 +17,8 @@ final class ServerController {
         let port = Self.configuredPort
         store.port = port
         store.serverStatus = .starting
+        // Hooks waiting on a permission prompt held the old server's connections: nothing waits now.
+        store.dropStalePermissions()
         let server = HTTPServer(port: port, acceptsOtherMacs: store.acceptsOtherMacs) { state in
             Task { @MainActor in
                 switch state {
@@ -25,7 +27,8 @@ final class ServerController {
                 }
             }
         } handler: { request in
-            await MainActor.run { API.handle(request, store: .shared) }
+            let response = await MainActor.run { API.handle(request, store: .shared) }
+            return await response.later?() ?? response
         }
         server.start()
         self.server = server

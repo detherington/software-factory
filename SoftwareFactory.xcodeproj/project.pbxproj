@@ -30,6 +30,7 @@
 		14D4FEF683794F1659359638 /* JSONDates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A37994D244EC3366BA22E8B /* JSONDates.swift */; };
 		15C9D03B5296F94788B000F4 /* PassportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A47C1CE9D995DD6341E664F1 /* PassportTests.swift */; };
 		169D4B3D0F72F8AC3F133612 /* ProjectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2926439496C883742795C774 /* ProjectView.swift */; };
+		1A81AF470373826AEDD04D53 /* PermissionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A198D1454BDC1B9497324F6 /* PermissionTests.swift */; };
 		1EE73DE78EA241CC0105EFC3 /* PromptsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 561480044E91CB95E9312C16 /* PromptsCard.swift */; };
 		1EFF36E93CFC965F810AA157 /* PhoneShare.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4304961679E593F33E28F272 /* PhoneShare.swift */; };
 		208432FDA18D4DF1E3A7144E /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4875B8A7B9F867027B68E27 /* SettingsView.swift */; };
@@ -52,6 +53,7 @@
 		4871EDB7ABD836392782306A /* AppStoreStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = D18724B419AD48D15C21398E /* AppStoreStatus.swift */; };
 		4C97D791C7E6D60D39B1D27D /* Report.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAEE6799FC5F4B9F63B79D08 /* Report.swift */; };
 		5097B862E6008E345953F543 /* ProjectStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE71367B597BD9790D2529D7 /* ProjectStore.swift */; };
+		50F8A56C8DD53F2593DE9356 /* PermissionDesk.swift in Sources */ = {isa = PBXBuildFile; fileRef = 223F595A4DDD4C245E1DD39E /* PermissionDesk.swift */; };
 		5102FCA536E81E033CA94CD1 /* DesktopChats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40CE93F5B9EE1786B5009D1C /* DesktopChats.swift */; };
 		51D130A3540C8CC1C0C3B9FD /* ClaudeSetup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DE41ABF704054893FFCD764 /* ClaudeSetup.swift */; };
 		53BC556F3052B65C626C2995 /* ClaudeSetup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DE41ABF704054893FFCD764 /* ClaudeSetup.swift */; };
@@ -111,6 +113,7 @@
 		BA07C9541015B33F2B45020D /* AppStoreStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = D18724B419AD48D15C21398E /* AppStoreStatus.swift */; };
 		BBD349231F047EE2851CAD87 /* DigestStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F307B62B1D5237572FA80E0B /* DigestStore.swift */; };
 		BD20E47413893ED1234368E0 /* PassportScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF38F580CC5C5382F30EEDE /* PassportScreen.swift */; };
+		BD41D8E64B5E4A1C0DE14B43 /* PermissionDesk.swift in Sources */ = {isa = PBXBuildFile; fileRef = 223F595A4DDD4C245E1DD39E /* PermissionDesk.swift */; };
 		BE627B78D55353A98B5334D7 /* FactoryWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2A5032A84CDB7957E106B10 /* FactoryWidgets.swift */; };
 		BEED54574F60552C279A7A9A /* PassportStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6956F65400F196C680A73E41 /* PassportStore.swift */; };
 		C290CB28F846E7BD18E2AD0E /* Notifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61BE9BF2EEF5C82BE66196EE /* Notifier.swift */; };
@@ -198,6 +201,7 @@
 		0D94AE4565CC38EEEB3B6796 /* BoardMerge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardMerge.swift; sourceTree = "<group>"; };
 		0ECB657D4E73EDF7F5EBFA54 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
 		1DE41ABF704054893FFCD764 /* ClaudeSetup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeSetup.swift; sourceTree = "<group>"; };
+		223F595A4DDD4C245E1DD39E /* PermissionDesk.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionDesk.swift; sourceTree = "<group>"; };
 		23AA7671D5A8D6B9C0D9E3B8 /* ServerController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerController.swift; sourceTree = "<group>"; };
 		2926439496C883742795C774 /* ProjectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectView.swift; sourceTree = "<group>"; };
 		2EE5FCE9DB2B34BDCAA2AC71 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -212,6 +216,7 @@
 		43FCF049FD1CF8505C9075B6 /* SoftwareFactoryPhoneWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = SoftwareFactoryPhoneWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		4717CD16391BD36BDBFB83C9 /* Timeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Timeline.swift; sourceTree = "<group>"; };
 		47DEA1EB46AA6BF8D7B327FD /* Navigator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Navigator.swift; sourceTree = "<group>"; };
+		4A198D1454BDC1B9497324F6 /* PermissionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionTests.swift; sourceTree = "<group>"; };
 		561480044E91CB95E9312C16 /* PromptsCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptsCard.swift; sourceTree = "<group>"; };
 		5BC811928D0E9E9C6867A97E /* ClaudeHook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeHook.swift; sourceTree = "<group>"; };
 		5CD2244F87063825DC24265E /* TestBoard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestBoard.swift; sourceTree = "<group>"; };
@@ -392,6 +397,7 @@
 				8B75C7F6A32912C804347908 /* Discovery.swift */,
 				61BE9BF2EEF5C82BE66196EE /* Notifier.swift */,
 				6956F65400F196C680A73E41 /* PassportStore.swift */,
+				223F595A4DDD4C245E1DD39E /* PermissionDesk.swift */,
 				4304961679E593F33E28F272 /* PhoneShare.swift */,
 				BE71367B597BD9790D2529D7 /* ProjectStore.swift */,
 				AE55A3E797CBE890A2D2A913 /* PromptStore.swift */,
@@ -429,6 +435,7 @@
 				3B7DFCA10249BB6F29669E01 /* DigestTests.swift */,
 				666337D23D83E0EEAD491F47 /* HookStateTests.swift */,
 				A47C1CE9D995DD6341E664F1 /* PassportTests.swift */,
+				4A198D1454BDC1B9497324F6 /* PermissionTests.swift */,
 				E891227F615808B2047D8DA0 /* PhoneChangeTests.swift */,
 				5CD2244F87063825DC24265E /* TestBoard.swift */,
 				38F7BA4E8383B5B734461838 /* WorktreeTests.swift */,
@@ -763,6 +770,8 @@
 				F7A1714CA64B57C8AC076586 /* PassportScreen.swift in Sources */,
 				0C741870799CF90D51B3D3C8 /* PassportStore.swift in Sources */,
 				15C9D03B5296F94788B000F4 /* PassportTests.swift in Sources */,
+				BD41D8E64B5E4A1C0DE14B43 /* PermissionDesk.swift in Sources */,
+				1A81AF470373826AEDD04D53 /* PermissionTests.swift in Sources */,
 				914B3BE5943A3333999F3B86 /* PhoneChangeTests.swift in Sources */,
 				A6B29EE1ED54ADADC002EC8C /* PhoneShare.swift in Sources */,
 				2426791A309A083C5C096692 /* Project.swift in Sources */,
@@ -817,6 +826,7 @@
 				E47DB2682444BA89860141D5 /* Passport.swift in Sources */,
 				BD20E47413893ED1234368E0 /* PassportScreen.swift in Sources */,
 				BEED54574F60552C279A7A9A /* PassportStore.swift in Sources */,
+				50F8A56C8DD53F2593DE9356 /* PermissionDesk.swift in Sources */,
 				1EFF36E93CFC965F810AA157 /* PhoneShare.swift in Sources */,
 				B213F8767BF74C55D9020DE8 /* Project.swift in Sources */,
 				D37297CC51F0E97345C4FDFF /* ProjectPath.swift in Sources */,

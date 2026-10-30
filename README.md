@@ -4,6 +4,7 @@ A status board for every coding project on this Mac: what's being worked on, wha
 
 - **The board.** Projects that need you come first, as full-bleed cards in their state's color. Every other project is a card with its three-letter code, like an airport code: TDR, EMN, LTC.
 - **Project pages.** How long it's been working or waiting, the milestone and its steps, live sessions with the worktree and branch each runs in, every worktree's branch and loose ends, and a timeline of reports, sessions and commits.
+- **Allow or deny from the board.** When Claude asks for permission to use a tool, its card and page show exactly what it wants to run, write or fetch, with **Allow** and **Deny**, on the Mac and the iPhone. See [Permission prompts](#permission-prompts).
 - **Open the chat in Claude.** For work done in Claude Desktop, you can jump straight to the chat:
   - **Project page:** a chat button sits beside Finder and Terminal. It opens the live session's chat, or else the project's latest chat.
   - **Sessions:** rows show the chat's title and open it when clicked. A Recent chats card lists the project's other chats.
@@ -119,7 +120,7 @@ A session in a worktree is named by the worktree's folder, wherever it is: a Cla
 curl -s -o /dev/null --connect-timeout 1 -m 3 -H 'Content-Type: application/json' --data-binary @- http://127.0.0.1:7720/api/hooks/claude || true # software-factory
 ```
 
-It prints nothing and always exits 0, so a closed app never gets in a session's way.
+It prints nothing and always exits 0, so a closed app never gets in a session's way. The `PermissionRequest` hook is the one exception: it waits for the board's answer and prints it (see [Permission prompts](#permission-prompts)).
 
 | Event | What the board does |
 |---|---|
@@ -127,11 +128,30 @@ It prints nothing and always exits 0, so a closed app never gets in a session's 
 | `UserPromptSubmit` | Working. The prompt's first line becomes the task; short replies like "yes" keep the task before them |
 | `PreToolUse` (AskUserQuestion, ExitPlanMode, Bash) | Needs you: the question, or "A plan is ready for your review". For Bash, what's about to run, while it runs |
 | `PostToolUse` | Working, with what it just did: "Editing Theme.swift", or a Bash command's description. TodoWrite, the desktop app's `update_plan`, and TaskCreate/TaskUpdate become the session's steps |
-| `Notification` (permission prompt) | Needs you, with Claude's message |
+| `PermissionRequest` | Needs you: "Asks to run git push", with the command, file or address in full. When the board can answer it, the hook waits for Allow or Deny |
+| `Notification` (permission prompt) | Needs you, with Claude's message, unless `PermissionRequest` already said what's asked |
 | `PreCompact`, `PostCompact` | Working · Compacting, until the compaction is done |
 | `Stop` | Blocked if the turn ended on an API error; Your call (or Needs you) if Claude Desktop's next-step box asked a question; Background while work the session started hasn't reported back; otherwise Idle. Logs "Finished after 12 m" |
 | `StopFailure` | The turn ended on an API error: Blocked, with the error in words |
 | `SessionEnd` | Removes the session |
+
+### Permission prompts
+
+Claude Code runs the `PermissionRequest` hook when it's about to ask you for permission to use a tool. That hook's curl keeps its request open until the board answers, for up to 30 minutes, and prints what the board answers:
+
+```bash
+curl -sf --connect-timeout 1 -m 1830 -H 'Content-Type: application/json' -H "X-Claude-Entrypoint: ${CLAUDE_CODE_ENTRYPOINT:-}" --data-binary @- http://127.0.0.1:7720/api/hooks/claude || true # software-factory
+```
+
+- **On the board.** The project's card and page show what's asked: the command (with Claude's description of it), the file to edit or write, the page to fetch, or an MCP tool's input. **Allow** and **Deny** answer it, and the timeline logs "Allowed on this Mac".
+- **On the iPhone.** The same prompt is on the project's card and page. An answer goes to your Macs through the iCloud inbox, which a Mac reads every three seconds while a hook waits, so it reaches Claude within a few seconds of reaching iCloud.
+- **What Claude Code is told.** `{"hookSpecificOutput": {"hookEventName": "PermissionRequest", "decision": {"behavior": "allow"}}}`, or `"deny"` with a message saying where it was denied. With no answer the hook prints nothing, and Claude's own prompt decides.
+- **Claude Desktop** shows its own prompt alongside, and whichever is answered first counts. When the prompt is answered in Desktop, its hook stops waiting and the board's buttons go. So the board waits for every Desktop prompt, which it knows from `CLAUDE_CODE_ENTRYPOINT` (`claude-desktop`, or an SDK host).
+- **Terminal** may not show its prompt until the hook is done, so there the board waits only once you've been away from all your Macs for five minutes, and leaves the prompt to Terminal otherwise. Come back while it waits and answer it on the board.
+- **Not prompts:** questions (`AskUserQuestion`) and plans (`ExitPlanMode`) are answered in Claude.
+- **When it's settled.** A prompt leaves the board when it's answered, when the tool runs, when another prompt or turn begins, when its hook stops waiting, or after 30 minutes. Prompts open when the app quits are dropped at the next launch, since nothing waits on them.
+- **Another Mac's sessions.** `factory hook` waits for the answer the same way and prints it, adding `factory_entrypoint` to what it forwards. A Mac that syncs its own board shows its prompts without buttons: its own board and the iPhone answer them.
+- **Turning it off.** Settings › Claude Code › *Answer permission prompts here and on the iPhone*. The board then answers nothing, and the hook returns at once.
 
 **Questions and errors.** Claude Desktop's next-step box (`wrap_up`) is how a turn ends with a question for you. Its `ask` becomes the card's headline: Your call, or Needs you when the box says it's `blocked` on your answer. A turn can also stop without finishing: on an API error (no connection, out of usage credits) or because you interrupted it. Then Claude Code may not run the Stop hook, which would leave the card saying Working. So when a session on this Mac has been quiet for a minute while marked working, the board reads the last exchange in its transcript. An error turns the card Blocked, with the error in words; an interruption makes it idle.
 
@@ -252,6 +272,7 @@ Settings › Morning Digest sets the time and the days (every day, or weekdays),
 The iPhone app, Factory, shows the board your Macs keep, Today, and the Passport.
 
 - **The board.** Counts, what needs you and what's under way as cards in their state's color, and every other project. Tap one for what's happening, its progress, sessions (with the worktree and branch each runs in), loose ends, to-dos and timeline. Pull to refresh.
+- **Allow or deny.** A permission prompt the board can answer shows what Claude asks to run, write or fetch, with **Allow** and **Deny**, on its card and its page. Your Mac passes the answer to Claude within a few seconds; until then the prompt says it's on its way. See [Permission prompts](#permission-prompts).
 - **Answer in Claude.** When a chat in Claude Desktop has Remote Control on, whatever it asks you (a question, a permission, your call, a block) gets an *Answer in Claude* button: on its card, on its page and in Today. It opens the chat in the Claude app, where you answer it and the Mac carries on. Working sessions get *Open in Claude*, to follow along. The board reads each chat's Remote Control session from Claude Desktop's file for it (`bridgeSessionIds`, newest last; none once you turn Remote Control off) whenever a turn ends, and it travels with the session to the iPhone and to your other Macs. Turn Remote Control on for a chat with the Remote Control switch in its toolbar, or for every new chat with Claude Desktop's *Connect new sessions to Remote Control* setting. Sessions in Terminal don't get the button.
 - **To-dos.** Add one on a project's page, tick one off, or press and hold to delete it. Your Macs pick up the change within about half a minute, and it shows on the phone at once.
 - **Today.** The same as on the Mac: the days since the last digest in numbers, then what's waiting on you, loose ends and old to-dos. Tick old to-dos off, or snooze any item for a day or a week, on every Mac.
@@ -317,7 +338,8 @@ The API listens on `127.0.0.1:7720`, and only on this Mac unless Other Macs is o
 | PATCH | `/api/projects/{id}/todos/{todo}` | Ticks or rewords one: `{"done": true}`, `{"text": "…"}`. `{todo}` is its `id`, or its number in the open list |
 | DELETE | `/api/projects/{id}/todos/{todo}` | Deletes one |
 | POST | `/api/todos` | Adds one to the project a folder belongs to: `{"path": "…", "text": "…"}` (or `"project"`) |
-| POST | `/api/hooks/claude` | A Claude Code hook's input, unchanged |
+| POST | `/api/hooks/claude` | A Claude Code hook's input, unchanged. For a `PermissionRequest` it can answer, the board holds the request until it does and responds with Claude Code's decision (or nothing) |
+| POST | `/api/permissions/{id}` | Answers a permission prompt: `{"allow": true}` or `{"allow": false}`. Says whether a hook was waiting: `{"answered": true}` |
 | GET | `/api/prompts` | Saved prompts: `project` is a project's id, or missing for every project |
 | POST | `/api/prompts` | Saves one: `{"title": "…", "text": "…", "project": "…"}`, without `project` for every project |
 | GET | `/api/passport` | The Passport's numbers: `?period=this-week` (the default), `last-week` or `month` |

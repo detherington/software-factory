@@ -169,6 +169,74 @@ struct LooseEndsChips: View {
     }
 }
 
+/// A permission prompt the board can answer: what Claude asks to do, in full, and Allow and Deny.
+/// Amber, as everything that needs you is.
+struct PermissionPrompt: View {
+    let ask: PermissionAsk
+    /// On a flood of the state's color, in ink.
+    var onFlood = false
+    /// Off where only another Mac's hook could take the answer.
+    var answerable = true
+    /// An answer sent from here that hasn't reached a Mac yet.
+    var sent: Bool?
+    let answer: (Bool) -> Void
+
+    var body: some View {
+        let ink = onFlood ? Switchyard.ink : Switchyard.text
+        VStack(alignment: .leading, spacing: 10) {
+            Text(ask.summary)
+                .font(.code(13))
+                .foregroundStyle(ink)
+                .lineLimit(8)
+                .multilineTextAlignment(.leading)
+                .textSelection(.enabled)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 9)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(ink.opacity(onFlood ? 0.1 : 0.06), in: .rect(cornerRadius: 10, style: .continuous))
+            if let detail = ask.detail {
+                Text(detail).font(.system(size: 13, weight: .medium)).foregroundStyle(ink.opacity(0.8)).lineLimit(2)
+            }
+            if let sent {
+                Label(sent ? String(localized: "Allowed. Waiting for your Mac to pass it on…") : String(localized: "Denied. Waiting for your Mac to pass it on…"),
+                      systemImage: sent ? "checkmark.shield.fill" : "xmark.shield.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(ink.opacity(0.8))
+            } else if answerable {
+                HStack(spacing: 8) {
+                    button(String(localized: "Allow"), symbol: "checkmark.shield.fill", prominent: true) { answer(true) }
+                    button(String(localized: "Deny"), symbol: "xmark", prominent: false) { answer(false) }
+                }
+            }
+        }
+    }
+
+    private func button(_ title: String, symbol: String, prominent: Bool, action: @escaping () -> Void) -> some View {
+        let fill: Color = onFlood ? (prominent ? Switchyard.ink : Switchyard.ink.opacity(0.14)) : (prominent ? Swatch.amber.color : Switchyard.surfaceRaised)
+        let label: Color = onFlood ? (prominent ? Swatch.amber.color : Switchyard.ink) : (prominent ? Switchyard.ink : Switchyard.text)
+        return Button(action: action) {
+            Label(title, systemImage: symbol)
+                .font(.headline(15, weight: .bold))
+                .foregroundStyle(label)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 9)
+                .background(fill, in: .capsule)
+                .contentShape(.capsule)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+extension Project {
+    /// The live session with a permission prompt the board can still answer.
+    func openPermission(at now: Date) -> (session: Session, ask: PermissionAsk)? {
+        for session in liveSessions(at: now) {
+            if let ask = session.permission, ask.isOpen(at: now) { return (session, ask) }
+        }
+        return nil
+    }
+}
+
 /// Chips that wrap onto more rows.
 struct FlowChips<Content: View>: View {
     @ViewBuilder var content: Content

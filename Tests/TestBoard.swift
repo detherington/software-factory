@@ -23,6 +23,7 @@ nonisolated enum TestBoard {
             "FactoryPhone": false,
             "FactoryPhoneAlerts": false,
             "FactoryDigest": false,
+            "FactoryAnswersPermissions": true,
             "FactoryMachineID": "test-mac",
             "FactoryMachineName": thisMac,
         ]) { _, new in new }

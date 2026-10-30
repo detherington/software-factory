@@ -324,14 +324,21 @@ func run(_ args: Arguments) async throws {
         }
     case "hook":
         // Never fail or slow a Claude Code session over the board: forward, stay quiet whatever
-        // happens, and when the board can't be reached, don't try again for a minute.
+        // happens, and when the board can't be reached, don't try again for a minute. A permission
+        // prompt waits for the board's answer instead, and prints it for Claude Code.
         var input = FileHandle.standardInput.readDataToEndOfFile()
-        // A board on another Mac can't look at this one's folders: say which repository and
-        // worktree the session is in. The board here looks for itself.
-        if !["127.0.0.1", "localhost", "::1"].contains(url.host() ?? ""),
-           var payload = (try? JSONSerialization.jsonObject(with: input)) as? [String: Any], let cwd = payload["cwd"] as? String {
-            payload["factory_root"] = ProjectPath.root(for: cwd)
-            payload["factory_worktree"] = ProjectPath.worktree(in: cwd)
+        let payload = (try? JSONSerialization.jsonObject(with: input)) as? [String: Any]
+        let isPermission = payload?["hook_event_name"] as? String == "PermissionRequest"
+        let remote = !["127.0.0.1", "localhost", "::1"].contains(url.host() ?? "")
+        if var payload, remote || isPermission {
+            // A board on another Mac can't look at this one's folders: say which repository and
+            // worktree the session is in. The board here looks for itself.
+            if remote, let cwd = payload["cwd"] as? String {
+                payload["factory_root"] = ProjectPath.root(for: cwd)
+                payload["factory_worktree"] = ProjectPath.worktree(in: cwd)
+            }
+            // Which app runs Claude Code: Claude Desktop shows its own prompt alongside the board's.
+            if isPermission { payload["factory_entrypoint"] = ProcessInfo.processInfo.environment["CLAUDE_CODE_ENTRYPOINT"] }
             if let data = try? JSONSerialization.data(withJSONObject: payload) { input = data }
         }
         let offline = URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "software-factory-offline")
@@ -340,9 +347,11 @@ func run(_ args: Arguments) async throws {
             return
         }
         do {
-            _ = try await request("POST", "api/hooks/claude", body: input, url: url, timeout: 2)
+            let answer = try await request("POST", "api/hooks/claude", body: input, url: url,
+                                           timeout: isPermission ? ClaudeSetup.permissionWait + 30 : 2)
+            if isPermission { FileHandle.standardOutput.write(answer) }
             try? FileManager.default.removeItem(at: offline)
-        } catch Failure.unreachable {
+        } catch Failure.unreachable where !isPermission {
             FileManager.default.createFile(atPath: offline.path, contents: nil)
         } catch {}
     case "install-hooks":

@@ -19,6 +19,8 @@ final class PhoneBoard {
     private(set) var passport: CloudBoard.Passport?
     private(set) var fetched: Date?
     private(set) var problem: String?
+    /// Permission prompts answered here, by id, until the Mac that holds them has passed it on.
+    private(set) var answeredPermissions: [String: Bool] = [:]
     private(set) var isRefreshing = false
     /// Ticks so relative times and stale sessions move on.
     private(set) var now = Date.now
@@ -144,6 +146,14 @@ final class PhoneBoard {
         change(todo, in: project)
     }
 
+    /// Answers a permission prompt: the Mac whose hook waits for it reads the answer from the inbox
+    /// within a few seconds, and passes it to Claude Code.
+    func answer(_ ask: PermissionAsk, allow: Bool, in project: Project) {
+        answeredPermissions[ask.id] = allow
+        send(CloudBoard.Change(kind: .permission, project: project.id, projectName: project.name,
+                               permission: ask.id, allow: allow, answered: .now))
+    }
+
     /// Hides a nudge from Today, here and on the Macs, for a day or a week.
     func snooze(_ nudge: Nudge, days: Int) {
         let now = Date.now
@@ -185,6 +195,9 @@ final class PhoneBoard {
 
     /// After a fetch: what the Macs have folded in is done with; the rest is applied again.
     private func reapplyPending() {
+        // A prompt is done with once no session asks it any more.
+        let asked = Set(projects.flatMap { $0.sessions.compactMap { $0.permission?.id } })
+        answeredPermissions = answeredPermissions.filter { asked.contains($0.key) }
         for (id, item) in pendingTodos {
             let fetched = projects.first { $0.id == item.project }?.todos?.first { $0.id == id }
             if let fetched, fetched.updated >= item.todo.updated { pendingTodos[id] = nil } else { apply(item.todo, to: item.project) }

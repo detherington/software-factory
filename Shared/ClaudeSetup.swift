@@ -3,7 +3,8 @@ import Foundation
 /// Installs Software Factory's hooks in Claude Code's user settings (~/.claude/settings.json), so
 /// every session reports in on its own. Shared by the app's Settings and `factory install-hooks`.
 ///
-/// Each hook posts its JSON input to the board and always exits 0, printing nothing.
+/// Each hook posts its JSON input to the board and always exits 0, printing nothing; but the
+/// PermissionRequest hook waits for the board's answer to the prompt, and prints that.
 /// - On the board's own Mac it's curl to 127.0.0.1: with the app closed, curl fails in a
 ///   millisecond and Claude Code carries on.
 /// - On another Mac it's `factory hook`, which reads the board's address and token from
@@ -34,6 +35,32 @@ nonisolated enum ClaudeSetup {
         "'\(path.replacingOccurrences(of: "'", with: "'\\''"))' hook >/dev/null 2>&1 || true \(marker)"
     }
 
+    /// How long the PermissionRequest hook waits for an answer from the board.
+    static let permissionWait: TimeInterval = 30 * 60
+
+    /// The PermissionRequest hook on the board's own Mac: it prints what the board answers (Claude
+    /// Code's decision, or nothing), and says which app runs Claude Code. `-f`: an error prints nothing.
+    static func permissionCommand(port: UInt16) -> String {
+        "curl -sf --connect-timeout 1 -m \(Int(permissionWait) + 30) -H 'Content-Type: application/json' "
+            + "-H \"X-Claude-Entrypoint: ${CLAUDE_CODE_ENTRYPOINT:-}\" --data-binary @- http://127.0.0.1:\(port)/api/hooks/claude || true \(marker)"
+    }
+
+    /// The PermissionRequest hook on another Mac: `factory hook` prints the board's answer.
+    static func permissionCommand(factory path: String) -> String {
+        "'\(path.replacingOccurrences(of: "'", with: "'\\''"))' hook 2>/dev/null || true \(marker)"
+    }
+
+    /// The PermissionRequest command that goes with one of our event commands.
+    static func permissionCommand(like command: String) -> String {
+        if let port = command.firstMatch(of: /127\.0\.0\.1:(\d+)\/api\/hooks\/claude/).flatMap({ UInt16($0.1) }) {
+            return permissionCommand(port: port)
+        }
+        if let quoted = command.firstMatch(of: /^'((?:[^']|'\\'')*)' hook/)?.1 {
+            return permissionCommand(factory: String(quoted).replacingOccurrences(of: "'\\''", with: "'"))
+        }
+        return command
+    }
+
     /// A Mac's name as it travels in the X-Factory-Machine header: percent-encoded, so any name fits.
     static func headerValue(machine: String) -> String {
         machine.addingPercentEncoding(withAllowedCharacters: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))) ?? "Mac"
@@ -53,7 +80,59 @@ nonisolated enum ClaudeSetup {
         // A turn that ends on an API error runs this instead of Stop.
         ("StopFailure", nil),
         ("SessionEnd", nil),
+        // A permission prompt, which the board can answer: this one waits for it.
+        ("PermissionRequest", "*"),
     ]
+
+    /// One of our entries in the settings: the event, its matcher, and the handler's command and timeout.
+    struct Entry: Hashable {
+        var event: String
+        var matcher: String?
+        var command: String
+        var timeout: Int
+    }
+
+    /// Our entries for a set of hooks running `command`.
+    static func entries(for command: String) -> [Entry] {
+        let permission = permissionCommand(like: command)
+        return events.map { event in
+            event.name == "PermissionRequest"
+                ? Entry(event: event.name, matcher: event.matcher, command: permission, timeout: Int(permissionWait) + 60)
+                : Entry(event: event.name, matcher: event.matcher, command: command, timeout: 5)
+        }
+    }
+
+    /// The entries of ours in a settings file's hooks.
+    static func installed(in hooks: [String: Any]) -> [Entry] {
+        hooks.flatMap { event, value -> [Entry] in
+            (value as? [[String: Any]] ?? []).compactMap { entry in
+                let handlers = entry["hooks"] as? [[String: Any]] ?? []
+                guard let handler = handlers.first(where: { handler in markers.contains { (handler["command"] as? String ?? "").contains($0) } }),
+                      let command = handler["command"] as? String else { return nil }
+                return Entry(event: event, matcher: entry["matcher"] as? String, command: command, timeout: handler["timeout"] as? Int ?? 0)
+            }
+        }
+    }
+
+    /// The command to install our hooks again with, when those in `hooks` aren't what this version
+    /// installs: an event added, a matcher or timeout changed. Nil when they're current, or not there.
+    static func upgrade(for hooks: [String: Any]) -> String? {
+        let ours = installed(in: hooks)
+        guard let command = ours.first(where: { $0.event != "PermissionRequest" })?.command else { return nil }
+        let wanted = entries(for: command)
+        return Set(ours) == Set(wanted) && ours.count == wanted.count ? nil : command
+    }
+
+    /// `hooks` with ours added.
+    static func hooks(_ hooks: [String: Any], adding command: String) -> [String: Any] {
+        var hooks = hooks
+        for entry in entries(for: command) {
+            var item: [String: Any] = ["hooks": [["type": "command", "command": entry.command, "timeout": entry.timeout]]]
+            if let matcher = entry.matcher { item["matcher"] = matcher }
+            hooks[entry.event] = (hooks[entry.event] as? [[String: Any]] ?? []) + [item]
+        }
+        return hooks
+    }
 
     static func isInstalled() -> Bool {
         guard let data = try? Data(contentsOf: settingsURL), let text = String(data: data, encoding: .utf8) else { return false }
@@ -70,35 +149,16 @@ nonisolated enum ClaudeSetup {
     @discardableResult
     static func install(command: String) throws -> URL? {
         var settings = try readSettings()
-        var hooks = stripped(settings["hooks"] as? [String: Any] ?? [:])
-        let handler: [String: Any] = ["type": "command", "command": command, "timeout": 5]
-        for event in events {
-            var entry: [String: Any] = ["hooks": [handler]]
-            if let matcher = event.matcher { entry["matcher"] = matcher }
-            hooks[event.name] = (hooks[event.name] as? [[String: Any]] ?? []) + [entry]
-        }
-        settings["hooks"] = hooks
+        settings["hooks"] = hooks(stripped(settings["hooks"] as? [String: Any] ?? [:]), adding: command)
         return try write(settings)
     }
 
-    /// Brings the hooks we installed up to date with `events` when a new version listens to more,
-    /// keeping the command they run (curl here, `factory hook` on another Mac). Does nothing when
-    /// they aren't installed. Returns whether it changed anything.
+    /// Brings the hooks we installed up to date when a new version listens to more events or runs
+    /// them differently, keeping the command they run (curl here, `factory hook` on another Mac).
+    /// Does nothing when they aren't installed. Returns whether it changed anything.
     @discardableResult
     static func upgradeIfNeeded() throws -> Bool {
-        guard isInstalled() else { return false }
-        let hooks = try readSettings()["hooks"] as? [String: Any] ?? [:]
-        let ours: [(event: String, matcher: String?, command: String)] = hooks.flatMap { event, value -> [(event: String, matcher: String?, command: String)] in
-            (value as? [[String: Any]] ?? []).compactMap { entry in
-                let handlers = entry["hooks"] as? [[String: Any]] ?? []
-                guard let command = handlers.compactMap({ $0["command"] as? String }).first(where: { command in markers.contains { command.contains($0) } })
-                else { return nil }
-                return (event, entry["matcher"] as? String, command)
-            }
-        }
-        guard let command = ours.first?.command else { return false }
-        let current = events.allSatisfy { wanted in ours.contains { $0.event == wanted.name && $0.matcher == wanted.matcher } }
-        guard !current || ours.count != events.count else { return false }
+        guard isInstalled(), let command = upgrade(for: try readSettings()["hooks"] as? [String: Any] ?? [:]) else { return false }
         try install(command: command)
         return true
     }

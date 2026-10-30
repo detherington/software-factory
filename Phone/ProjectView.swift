@@ -193,6 +193,7 @@ private struct TodoList: View {
 private struct Now: View {
     let project: Project
     let now: Date
+    @Environment(PhoneBoard.self) private var board
 
     var body: some View {
         let state = project.state(at: now)
@@ -214,7 +215,15 @@ private struct Now: View {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Switchyard.ink.opacity(0.8))
                 }
-                if let session = project.openable(at: now) {
+                if let ask = project.openPermission(at: now)?.ask {
+                    PermissionPrompt(ask: ask, onFlood: true, sent: board.answeredPermissions[ask.id]) { allow in
+                        board.answer(ask, allow: allow, in: project)
+                    }
+                    .padding(.top, 8)
+                    if let session = project.openable(at: now) {
+                        AnswerLink(session: session, onFlood: true)
+                    }
+                } else if let session = project.openable(at: now) {
                     AnswerLink(session: session, onFlood: true)
                         .padding(.top, 8)
                 } else if state.asksYou {

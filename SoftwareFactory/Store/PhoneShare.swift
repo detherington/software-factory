@@ -43,6 +43,7 @@ final class PhoneShare {
 
     @ObservationIgnored private var loop: Task<Void, Never>?
     @ObservationIgnored private var pending: Task<Void, Never>?
+    @ObservationIgnored private var quickInbox: Task<Void, Never>?
     @ObservationIgnored private var firstChange: Date?
     @ObservationIgnored private var isSending = false
     @ObservationIgnored private var zoneReady = false
@@ -114,13 +115,14 @@ final class PhoneShare {
         status = .off
     }
 
-    /// The board changed: send it within ten seconds, and at least every thirty while it keeps changing.
-    func boardChanged() {
+    /// The board changed: send it within ten seconds, and at least every thirty while it keeps changing;
+    /// at once when it's `soon`, as a permission prompt the iPhone can answer is.
+    func boardChanged(soon: Bool = false) {
         guard isOn, loop != nil else { return }
         let now = Date.now
         if firstChange == nil { firstChange = now }
         pending?.cancel()
-        let wait = min(10, max(0, 30 - now.timeIntervalSince(firstChange ?? now)))
+        let wait = soon ? 0 : min(10, max(0, 30 - now.timeIntervalSince(firstChange ?? now)))
         pending = Task { [weak self] in
             try? await Task.sleep(for: .seconds(wait))
             guard !Task.isCancelled else { return }
@@ -289,6 +291,20 @@ final class PhoneShare {
 
     // MARK: - Changes from the iPhone
 
+    /// A hook is waiting for a permission prompt's answer, which may come from the iPhone: send the
+    /// board now, and read the inbox every few seconds until nothing waits.
+    func permissionAsked() {
+        boardChanged(soon: true)
+        guard isOn, database != nil, quickInbox == nil else { return }
+        quickInbox = Task { [weak self] in
+            while !Task.isCancelled, PermissionDesk.shared.isWaiting {
+                try? await Task.sleep(for: .seconds(3))
+                await self?.readInbox()
+            }
+            self?.quickInbox = nil
+        }
+    }
+
     /// Folds in what was changed on the iPhone (to-dos, snoozes), then clears it from the inbox. One
     /// for a project this Mac doesn't have stays for another Mac, a day at most.
     private func readInbox() async {
@@ -311,6 +327,12 @@ final class PhoneShare {
         case .snooze:
             if let nudge = change.nudge, let snooze = change.snooze { digests.applySnooze(snooze, to: nudge) }
             return true
+        case .permission:
+            guard let id = change.permission, let allow = change.allow else { return true }
+            let known = store.local.values.contains { $0.sessions.contains { $0.permission?.id == id } }
+            let answered = store.answerPermission(id, allow: allow, from: String(localized: "the iPhone"))
+            // One this Mac never had is another Mac's to answer, for as long as its hook could wait.
+            return answered || known || now.timeIntervalSince(change.answered ?? .distantPast) > ClaudeSetup.permissionWait
         }
     }
 

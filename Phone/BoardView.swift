@@ -161,13 +161,18 @@ private struct Counts: View {
 private struct LiveTile: View {
     let project: Project
     let now: Date
+    @Environment(PhoneBoard.self) private var board
 
     var body: some View {
         let state = project.state(at: now)
         VStack(alignment: .leading, spacing: 14) {
             NavigationLink(value: project.id) { content(state) }
                 .buttonStyle(.plain)
-            if let session = project.answerable(at: now) {
+            if let ask = project.openPermission(at: now)?.ask {
+                PermissionPrompt(ask: ask, onFlood: true, sent: board.answeredPermissions[ask.id]) { allow in
+                    board.answer(ask, allow: allow, in: project)
+                }
+            } else if let session = project.answerable(at: now) {
                 AnswerLink(session: session, onFlood: true)
             }
         }

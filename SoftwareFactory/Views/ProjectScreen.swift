@@ -113,6 +113,7 @@ struct ProjectContent: View {
 private struct NowPanel: View {
     let project: Project
     let now: Date
+    @Environment(ProjectStore.self) private var store
 
     var body: some View {
         let state = project.state(at: now)
@@ -131,7 +132,13 @@ private struct NowPanel: View {
                         .foregroundStyle(Switchyard.ink)
                         .textSelection(.enabled)
                 }
-                if let lead, lead.state == .background, let jobs = lead.jobsSummary(at: now) {
+                if let ask = project.openPermission(at: now)?.ask {
+                    PermissionPrompt(ask: ask, onFlood: true, answerable: PermissionDesk.shared.isWaiting(for: ask.id)) { allow in
+                        store.answerPermission(ask.id, allow: allow, from: String(localized: "this Mac"))
+                    }
+                    .frame(maxWidth: 760, alignment: .leading)
+                    .padding(.top, 6)
+                } else if let lead, lead.state == .background, let jobs = lead.jobsSummary(at: now) {
                     Label(String(localized: "Waiting on \(jobs)"), systemImage: "hourglass")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(Switchyard.ink.opacity(0.8))

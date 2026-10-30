@@ -9,6 +9,7 @@ struct SettingsView: View {
     @State private var paletteHotKey = PaletteController.usesHotKey
     @State private var portText = String(ServerController.configuredPort)
     @State private var message: String?
+    @Bindable private var permissions = PermissionDesk.shared
 
     var body: some View {
         Form {
@@ -44,6 +45,7 @@ struct SettingsView: View {
                         Button(hooksInstalled ? "Reinstall" : "Install") { run { try ClaudeSetup.install(port: store.port) } }
                     }
                 }
+                Toggle("Answer permission prompts here and on the iPhone", isOn: $permissions.isOn)
                 LabeledContent("Instructions") {
                     Button("Copy CLAUDE.md Section") {
                         Reveal.copy(ClaudeSetup.claudeInstructions(port: store.port))
@@ -53,7 +55,7 @@ struct SettingsView: View {
             } header: {
                 Text("Claude Code")
             } footer: {
-                Text("The hooks go in ~/.claude/settings.json and report every session's state: working, waiting for you, finished. The CLAUDE.md section asks Claude to report milestones, steps and blockers too. A backup of your settings is kept beside them.")
+                Text("The hooks go in ~/.claude/settings.json and report every session's state: working, waiting for you, finished. The CLAUDE.md section asks Claude to report milestones, steps and blockers too. A backup of your settings is kept beside them.\n\nWhen Claude asks to use a tool, the board shows Allow and Deny, here and on the iPhone, for up to 30 minutes. Claude Desktop's own prompt stays, and the first answer counts. A Terminal session's prompt waits for the board only once you've been away from your Macs for five minutes.")
             }
 
             NotificationsSection()

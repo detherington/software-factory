@@ -228,6 +228,22 @@ struct LooseEnds: Codable, Hashable, Sendable {
     }
 }
 
+/// A tool call waiting for your permission. Claude Code's PermissionRequest hook holds its request to
+/// the board open until it's answered on the board or the iPhone, the prompt is answered in Claude,
+/// or `until`; the board can answer it till then.
+struct PermissionAsk: Codable, Hashable, Sendable {
+    var id: String
+    var tool: String
+    /// What it wants to do: the command, the file, the address.
+    var summary: String
+    /// Claude's own words for a command, when it gave some.
+    var detail: String?
+    var asked: Date
+    var until: Date
+
+    func isOpen(at now: Date) -> Bool { now < until }
+}
+
 /// Work a session started to come back to: a background command, an async agent, a monitor, a
 /// scheduled wake-up. Its notification (or TaskStop) ends it, by `id`.
 struct BackgroundJob: Codable, Hashable, Sendable {
@@ -283,6 +299,8 @@ struct Session: Codable, Identifiable, Hashable, Sendable {
     /// Its chat's Remote Control session on claude.ai ("session_…"), when the chat is in Claude
     /// Desktop and has Remote Control on: the Claude app opens it, to answer from the iPhone.
     var remoteControl: String?
+    /// A tool call waiting for your permission, which the board can answer while the hook waits.
+    var permission: PermissionAsk?
     /// What its current tool call is doing (a test run, a build, an upload, a compaction), and
     /// whether it's in plan mode.
     var action: WorkMode?

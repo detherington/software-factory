@@ -6,15 +6,17 @@ import Foundation
 ///
 /// - UserPromptSubmit: working, and the first line the user wrote becomes the task. Turns the app
 ///   starts (a linked session's news, a background task's result) keep the task they had.
-/// - PreToolUse for AskUserQuestion or ExitPlanMode, and a permission Notification: needs you.
+/// - PreToolUse for AskUserQuestion or ExitPlanMode, PermissionRequest, and a permission Notification:
+///   needs you. A PermissionRequest the board can answer becomes the session's `permission`.
 /// - PostToolUse: working again, with what it just did; TodoWrite and plan updates become steps.
 /// - StopFailure: the turn ended on an API error, so the session is blocked, with the error in words.
 /// - Stop: idle, its turn finished; or Background, while work it started (a background command, an
 ///   async agent, a monitor, a scheduled wake-up) hasn't reported back. SessionEnd: the session goes.
 extension ProjectStore {
-    /// `machine` names the other Mac it came from; nil for this one.
+    /// `machine` names the other Mac it came from; nil for this one. `permissionUntil`, for a
+    /// PermissionRequest, is how long its hook waits for an answer from the board.
     @discardableResult
-    func applyClaudeHook(_ payload: [String: Any], machine: String? = nil) -> Project? {
+    func applyClaudeHook(_ payload: [String: Any], machine: String? = nil, permissionUntil: Date? = nil) -> Project? {
         guard let event = payload["hook_event_name"] as? String,
               let cwd = payload["cwd"] as? String,
               let sessionID = payload["session_id"] as? String else { return nil }
@@ -50,6 +52,12 @@ extension ProjectStore {
             if let mode = payload["permission_mode"] as? String { s.planMode = mode == "plan" }
             let tool = payload["tool_name"] as? String ?? ""
             let input = payload["tool_input"] as? [String: Any] ?? [:]
+            // A prompt the board could answer is settled once the session moves on: the tool ran,
+            // another prompt came, or the turn ended. A hook still waiting on it stops.
+            if let ask = s.permission, HookText.settles(ask, event: event, tool: tool, input: input) {
+                PermissionDesk.shared.settle(ask.id, with: nil)
+                s.permission = nil
+            }
 
             switch event {
             case "SessionStart":
@@ -133,12 +141,25 @@ extension ProjectStore {
                     s.askBlocks = input["blocked"] as? Bool
                 }
 
+            case "PermissionRequest":
+                // Questions and plans come by PreToolUse, in their own words.
+                guard tool != "AskUserQuestion", tool != "ExitPlanMode" else { break }
+                let words = HookText.permission(tool: tool, input: input)
+                set(.waiting)
+                s.message = words.message
+                s.action = nil
+                s.permission = permissionUntil.map {
+                    PermissionAsk(id: UUID().uuidString, tool: tool, summary: words.summary, detail: words.detail, asked: now, until: $0)
+                }
+                p.log(Event(date: now, state: .waiting, symbol: ProjectState.waiting.symbol, title: words.message, detail: words.summary))
+
             case "Notification":
                 let message = payload["message"] as? String ?? ""
                 let type = payload["notification_type"] as? String ?? ""
                 let needsYou = type == "permission_prompt" || type == "elicitation_dialog"
                     || (type.isEmpty && message.localizedCaseInsensitiveContains("permission"))
-                if needsYou {
+                // Six seconds into a prompt the PermissionRequest hook already put in words, it adds nothing.
+                if needsYou, s.state != .waiting || s.message == nil {
                     set(.waiting)
                     s.message = message.isEmpty ? "Waiting for your permission" : message
                     p.log(Event(date: now, state: .waiting, symbol: ProjectState.waiting.symbol, title: s.message!, detail: s.task))
@@ -353,6 +374,49 @@ nonisolated enum HookText {
             return "A plan is ready for your review"
         default:
             return nil
+        }
+    }
+
+    /// A permission prompt in words: what the card says ("Asks to run git push"), what it would do in
+    /// full (the command, the file, the address), and Claude's own description of it.
+    static func permission(tool: String, input: [String: Any]) -> (message: String, summary: String, detail: String?) {
+        func clip(_ text: String, _ length: Int) -> String {
+            text.count > length ? String(text.prefix(length - 1)) + "…" : text
+        }
+        let path = (input["file_path"] as? String ?? input["notebook_path"] as? String).map { path in
+            path.hasPrefix(ProjectPath.home + "/") ? "~" + path.dropFirst(ProjectPath.home.count) : path
+        }
+        let file = path.map { ($0 as NSString).lastPathComponent } ?? "a file"
+        switch tool {
+        case "Bash":
+            let command = (input["command"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let line = command.split(separator: "\n").first.map(String.init) ?? ""
+            return ("Asks to run \(clip(line, 60))", clip(command, 600), (input["description"] as? String)?.trimmed)
+        case "Edit", "MultiEdit", "NotebookEdit":
+            return ("Asks to edit \(file)", path ?? file, nil)
+        case "Write":
+            return ("Asks to write \(file)", path ?? file, nil)
+        case "WebFetch":
+            let url = input["url"] as? String ?? ""
+            return ("Asks to fetch \(URL(string: url)?.host() ?? "a page")", clip(url, 600), nil)
+        case "WebSearch":
+            return ("Asks to search the web", clip(input["query"] as? String ?? "", 600), nil)
+        default:
+            let json = (try? JSONSerialization.data(withJSONObject: input, options: [.sortedKeys, .withoutEscapingSlashes]))
+                .map { String(decoding: $0, as: UTF8.self) } ?? ""
+            // "mcp__slack__send_message": send_message, from slack.
+            let parts = tool.components(separatedBy: "__")
+            let name = tool.hasPrefix("mcp__") && parts.count >= 3 ? "\(parts[2...].joined(separator: "__")) from \(parts[1])" : tool
+            return ("Asks to use \(name)", clip(json, 600), nil)
+        }
+    }
+
+    /// Whether `event` settles a permission prompt: the same call ran, another prompt came, or the turn ended.
+    static func settles(_ ask: PermissionAsk, event: String, tool: String, input: [String: Any]) -> Bool {
+        switch event {
+        case "PermissionRequest", "UserPromptSubmit", "Stop", "StopFailure", "SessionStart", "SessionEnd": true
+        case "PostToolUse": tool == ask.tool && permission(tool: tool, input: input).summary == ask.summary
+        default: false
         }
     }
 
