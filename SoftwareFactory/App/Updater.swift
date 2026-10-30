@@ -4,7 +4,9 @@ import Observation
 /// Updates the app from GitHub without Terminal. Each build records the clone it was built from
 /// and its commit; the updater fetches that clone to see what's new, and to update runs what you'd
 /// type: `git pull --ff-only`, then `scripts/install.sh`, which builds the app, replaces it in
-/// ~/Applications (stopping this copy) and opens the new one.
+/// ~/Applications (stopping this copy) and opens the new one. First it puts back the Xcode project,
+/// which install.sh generated from project.yml: another Mac's XcodeGen may write it a little
+/// differently, and the pull would refuse to replace it.
 @MainActor
 @Observable
 final class Updater {
@@ -98,7 +100,7 @@ final class Updater {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/zsh")
         // A login shell, for Homebrew's PATH (xcodegen) the way Terminal has it.
-        process.arguments = ["-lc", #"cd "$FACTORY_SOURCE" && git pull --ff-only && scripts/install.sh"#]
+        process.arguments = ["-lc", #"cd "$FACTORY_SOURCE" && git checkout -- SoftwareFactory.xcodeproj && git pull --ff-only && scripts/install.sh"#]
         var environment = ProcessInfo.processInfo.environment
         environment["FACTORY_SOURCE"] = source.path
         environment["PATH"] = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
