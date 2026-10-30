@@ -169,8 +169,8 @@ private struct LiveTile: View {
             NavigationLink(value: project.id) { content(state) }
                 .buttonStyle(.plain)
             if let ask = project.openPermission(at: now)?.ask {
-                PermissionPrompt(ask: ask, onFlood: true, sent: board.answeredPermissions[ask.id]) { allow in
-                    board.answer(ask, allow: allow, in: project)
+                PermissionPrompt(ask: ask, onFlood: true, sent: board.answeredPermissions[ask.id], compact: true) { reply in
+                    board.answer(ask, reply: reply, in: project)
                 }
             } else if let session = project.answerable(at: now) {
                 AnswerLink(session: session, onFlood: true)

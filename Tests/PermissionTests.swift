@@ -97,8 +97,8 @@ struct PermissionTests {
         #expect(PermissionDesk.wait(tool: "Bash", entrypoint: "cli", away: false, isOn: true) == nil)
         #expect(PermissionDesk.wait(tool: "Bash", entrypoint: nil, away: false, isOn: true) == nil)
         #expect(PermissionDesk.wait(tool: "Bash", entrypoint: "cli", away: true, isOn: true) == wait)
-        // Questions and plans are answered in Claude; and the setting turns it all off.
-        #expect(PermissionDesk.wait(tool: "AskUserQuestion", entrypoint: "claude-desktop", away: true, isOn: true) == nil)
+        // Questions wait as permissions do; plans are reviewed in Claude; and the setting turns it all off.
+        #expect(PermissionDesk.wait(tool: "AskUserQuestion", entrypoint: "claude-desktop", away: false, isOn: true) == ClaudeSetup.permissionWait)
         #expect(PermissionDesk.wait(tool: "ExitPlanMode", entrypoint: "claude-desktop", away: true, isOn: true) == nil)
         #expect(PermissionDesk.wait(tool: "Bash", entrypoint: "claude-desktop", away: true, isOn: false) == nil)
     }
@@ -305,5 +305,97 @@ struct PermissionTests {
         // Only errors go to /dev/null: the answer comes out.
         #expect(!ClaudeSetup.permissionCommand(factory: path).contains(" hook >/dev/null"))
         #expect(ClaudeSetup.command(factory: path).contains(" hook >/dev/null"))
+    }
+
+    // MARK: - Questions
+
+    private let question = "Which way should the start screen go?"
+
+    private var questionInput: [String: Any] {
+        ["questions": [["question": question, "header": "Direction", "multiSelect": false,
+                        "options": [["label": "Backdrop", "description": "The canvas behind everything"], ["label": "Grid"]]]]]
+    }
+
+    @discardableResult
+    private func askQuestion(_ session: String) -> Project? {
+        store.hook("UserPromptSubmit", session, ["prompt": "Redo the start screen"])
+        store.hook("PreToolUse", session, ["tool_name": "AskUserQuestion", "tool_input": questionInput])
+        return store.applyClaudeHook([
+            "hook_event_name": "PermissionRequest", "session_id": session, "cwd": TestBoard.projectFolder,
+            "tool_name": "AskUserQuestion", "tool_input": questionInput,
+        ], permissionUntil: .now.addingTimeInterval(600))
+    }
+
+    @Test func aQuestionCanBeAnsweredFromTheBoard() throws {
+        let id = UUID().uuidString
+        askQuestion(id)
+        let session = try #require(store.session(id))
+        #expect(session.state == .waiting)
+        #expect(session.message == question)
+        let questions = try #require(session.permission?.questions)
+        #expect(questions.first?.header == "Direction")
+        #expect(questions.first?.options.map(\.label) == ["Backdrop", "Grid"])
+        #expect(questions.first?.options.first?.description == "The canvas behind everything")
+
+        // Answered in Claude: the question goes.
+        store.hook("PostToolUse", id, ["tool_name": "AskUserQuestion", "tool_input": questionInput])
+        #expect(store.session(id)?.permission == nil)
+    }
+
+    /// The answers go back inside the tool's input, as Claude Code takes them: Claude Desktop took
+    /// one this way on 30 October.
+    @Test func answersGoBackInTheToolsInput() throws {
+        let input = try JSONSerialization.data(withJSONObject: questionInput)
+        let answer = PermissionDesk.Answer(allow: true, from: "this Mac", answers: [question: "Grid"])
+        let output = try #require(JSONSerialization.jsonObject(with: PermissionDesk.decision(answer, input: input)) as? [String: Any])
+        let decision = try #require((output["hookSpecificOutput"] as? [String: Any])?["decision"] as? [String: Any])
+        #expect(decision["behavior"] as? String == "allow")
+        let updated = try #require(decision["updatedInput"] as? [String: Any])
+        #expect((updated["questions"] as? [Any])?.count == 1)
+        #expect((updated["answers"] as? [String: String])?[question] == "Grid")
+    }
+
+    @Test func whatYouPickAndTypeBecomesTheAnswer() {
+        let one = PermissionAsk.Question(question: "One?", options: [.init(label: "A"), .init(label: "B")])
+        let many = PermissionAsk.Question(question: "Many?", options: [.init(label: "A"), .init(label: "B"), .init(label: "C")], multiSelect: true)
+        #expect(PermissionAsk.answer(to: one, chosen: ["B"], typed: "") == "B")
+        #expect(PermissionAsk.answer(to: one, chosen: ["B"], typed: " Neither ") == "Neither")
+        #expect(PermissionAsk.answer(to: one, chosen: [], typed: "") == nil)
+        #expect(PermissionAsk.answer(to: many, chosen: ["C", "A"], typed: "") == "A, C")
+        #expect(PermissionAsk.answer(to: many, chosen: ["B"], typed: "and D") == "B, and D")
+    }
+
+    @Test func answeringAQuestionLogsTheAnswer() throws {
+        let id = UUID().uuidString
+        askQuestion(id)
+        let askID = try #require(store.session(id)?.permission?.id)
+        // An older iPhone's Allow can't answer a question.
+        #expect(!store.answerPermission(askID, reply: .allow, from: "the iPhone"))
+        #expect(store.session(id)?.permission != nil)
+        // Nothing waits in a test, but the answer still settles it on the board.
+        store.answerPermission(askID, reply: .answers([question: "Grid"]), from: "the iPhone")
+        #expect(store.session(id)?.permission == nil)
+    }
+
+    @Test func aQuestionsNotificationButtonsAnswerIt() throws {
+        let id = UUID().uuidString
+        askQuestion(id)
+        let askID = try #require(store.session(id)?.permission?.id)
+        #expect(Notifier.answers(action: "option.1", text: nil, to: askID, in: store) == [question: "Grid"])
+        #expect(Notifier.answers(action: "reply", text: " Something else ", to: askID, in: store) == [question: "Something else"])
+        #expect(Notifier.answers(action: "option.7", text: nil, to: askID, in: store) == nil)
+        #expect(Notifier.answers(action: "open-chat", text: nil, to: askID, in: store) == nil)
+    }
+
+    /// On the iPhone a question's alert has no Allow or Deny: tapping it opens the project.
+    @Test func aQuestionsAlertIsNamedForAQuestion() throws {
+        let id = UUID().uuidString
+        let project = try #require(askQuestion(id))
+        let askID = try #require(store.session(id)?.permission?.id)
+        let alerts = PhoneShare.alertsDue(in: [project], now: .now, sent: [])
+        #expect(alerts.map(\.id) == [PermissionAlert.questionRecordName(for: askID)])
+        #expect(alerts.first?.title == "Moth Radio asks")
+        #expect(alerts.first?.body == "\(question)\nBackdrop · Grid")
+        #expect(PermissionAlert.ask(fromRecordName: alerts[0].id) == nil)
     }
 }

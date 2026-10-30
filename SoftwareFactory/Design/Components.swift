@@ -179,11 +179,23 @@ struct PermissionPrompt: View {
     var answerable = true
     /// An answer sent from here that hasn't reached a Mac yet.
     var sent: Bool?
-    let answer: (Bool) -> Void
+    /// Without options' descriptions or a box for your own words, where room is short.
+    var compact = false
+    let answer: (PermissionAsk.Reply) -> Void
 
     var body: some View {
+        if let questions = ask.questions, !questions.isEmpty {
+            QuestionPrompt(questions: questions, onFlood: onFlood, answerable: answerable, sent: sent != nil, compact: compact) {
+                answer(.answers($0))
+            }
+        } else {
+            permission
+        }
+    }
+
+    private var permission: some View {
         let ink = onFlood ? Switchyard.ink : Switchyard.text
-        VStack(alignment: .leading, spacing: 10) {
+        return VStack(alignment: .leading, spacing: 10) {
             Text(ask.summary)
                 .font(.code(13))
                 .foregroundStyle(ink)
@@ -204,17 +216,151 @@ struct PermissionPrompt: View {
                     .foregroundStyle(ink.opacity(0.8))
             } else if answerable {
                 HStack(spacing: 8) {
-                    button(String(localized: "Allow"), symbol: "checkmark.shield.fill", prominent: true) { answer(true) }
-                    button(String(localized: "Deny"), symbol: "xmark", prominent: false) { answer(false) }
+                    PromptButton(title: String(localized: "Allow"), symbol: "checkmark.shield.fill", prominent: true, onFlood: onFlood) { answer(.allow) }
+                    PromptButton(title: String(localized: "Deny"), symbol: "xmark", prominent: false, onFlood: onFlood) { answer(.deny) }
                 }
             }
         }
     }
+}
 
-    private func button(_ title: String, symbol: String, prominent: Bool, action: @escaping () -> Void) -> some View {
+/// Claude's questions (AskUserQuestion), to answer on the board or the iPhone. One question with one
+/// answer goes as soon as you pick; otherwise pick for each, then Answer. Your own words can stand
+/// in for the options, as Claude's "Other" does.
+struct QuestionPrompt: View {
+    let questions: [PermissionAsk.Question]
+    var onFlood = false
+    var answerable = true
+    /// Answered from here; waiting for a Mac to pass it on.
+    var sent = false
+    var compact = false
+    let answer: ([String: String]) -> Void
+
+    @State private var chosen: [String: Set<String>] = [:]
+    @State private var typed: [String: String] = [:]
+
+    /// One question, one answer: picking is answering.
+    private var answersAtOnce: Bool { questions.count == 1 && !questions[0].multiSelect }
+
+    private var answers: [String: String]? {
+        var answers: [String: String] = [:]
+        for question in questions {
+            guard let answer = PermissionAsk.answer(to: question, chosen: chosen[question.question] ?? [], typed: typed[question.question] ?? "") else { return nil }
+            answers[question.question] = answer
+        }
+        return answers
+    }
+
+    var body: some View {
+        let ink = onFlood ? Switchyard.ink : Switchyard.text
+        VStack(alignment: .leading, spacing: 14) {
+            ForEach(questions, id: \.question) { question in
+                VStack(alignment: .leading, spacing: 8) {
+                    if let header = question.header {
+                        TrackedLabel(header, size: 10, color: ink.opacity(0.7))
+                    }
+                    // The first is the card's headline already.
+                    if questions.count > 1 {
+                        Text(question.question)
+                            .font(.headline(17, weight: .bold))
+                            .foregroundStyle(ink)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if question.multiSelect {
+                        Text("Choose any").font(.system(size: 12, weight: .medium)).foregroundStyle(ink.opacity(0.7))
+                    }
+                    ForEach(question.options, id: \.label) { option in
+                        optionButton(option, in: question, ink: ink)
+                    }
+                    if answerable, !sent, !compact {
+                        TextField(String(localized: "Or type your own answer"), text: binding(for: question))
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 14))
+                            .foregroundStyle(ink)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(ink.opacity(onFlood ? 0.1 : 0.06), in: .rect(cornerRadius: 10, style: .continuous))
+                            .onSubmit { if answersAtOnce { send() } }
+                    }
+                }
+            }
+            if sent {
+                Label(String(localized: "Answered. Waiting for your Mac to pass it on…"), systemImage: "text.bubble.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(ink.opacity(0.8))
+            } else if answerable, !answersAtOnce || !(typed[questions[0].question] ?? "").isEmpty {
+                PromptButton(title: String(localized: "Answer"), symbol: "arrow.up", prominent: true, onFlood: onFlood) { send() }
+                    .disabled(answers == nil)
+                    .opacity(answers == nil ? 0.5 : 1)
+            }
+        }
+    }
+
+    private func optionButton(_ option: PermissionAsk.Question.Option, in question: PermissionAsk.Question, ink: Color) -> some View {
+        let picked = chosen[question.question]?.contains(option.label) == true
+        let fill: Color = picked ? (onFlood ? Switchyard.ink : Swatch.amber.color) : ink.opacity(onFlood ? 0.1 : 0.06)
+        let text: Color = picked ? (onFlood ? Swatch.amber.color : Switchyard.ink) : ink
+        return Button {
+            pick(option.label, in: question)
+        } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                if question.multiSelect {
+                    Image(systemName: picked ? "checkmark.square.fill" : "square").font(.system(size: 14, weight: .semibold))
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(option.label).font(.headline(15, weight: .bold))
+                    if let description = option.description, !compact {
+                        Text(description).font(.system(size: 12)).opacity(0.75).lineLimit(2)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(text)
+            .multilineTextAlignment(.leading)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .background(fill, in: .rect(cornerRadius: 12, style: .continuous))
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .disabled(!answerable || sent)
+        .help(option.description ?? "")
+    }
+
+    private func pick(_ label: String, in question: PermissionAsk.Question) {
+        var picked = chosen[question.question] ?? []
+        if question.multiSelect {
+            if !picked.insert(label).inserted { picked.remove(label) }
+        } else {
+            picked = [label]
+            typed[question.question] = nil
+        }
+        chosen[question.question] = picked
+        if answersAtOnce { send() }
+    }
+
+    private func binding(for question: PermissionAsk.Question) -> Binding<String> {
+        Binding { typed[question.question] ?? "" } set: { typed[question.question] = $0 }
+    }
+
+    private func send() {
+        guard let answers else { return }
+        answer(answers)
+    }
+}
+
+/// A prompt's capsule button: Allow, Deny, Answer.
+struct PromptButton: View {
+    let title: String
+    let symbol: String
+    let prominent: Bool
+    var onFlood = false
+    let action: () -> Void
+
+    var body: some View {
         let fill: Color = onFlood ? (prominent ? Switchyard.ink : Switchyard.ink.opacity(0.14)) : (prominent ? Swatch.amber.color : Switchyard.surfaceRaised)
         let label: Color = onFlood ? (prominent ? Swatch.amber.color : Switchyard.ink) : (prominent ? Switchyard.ink : Switchyard.text)
-        return Button(action: action) {
+        Button(action: action) {
             Label(title, systemImage: symbol)
                 .font(.headline(15, weight: .bold))
                 .foregroundStyle(label)

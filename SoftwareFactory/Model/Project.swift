@@ -240,8 +240,43 @@ struct PermissionAsk: Codable, Hashable, Sendable {
     var detail: String?
     var asked: Date
     var until: Date
+    /// Claude's questions (AskUserQuestion), when it asks rather than asking permission: the board
+    /// answers with the options you choose.
+    var questions: [Question]?
+
+    struct Question: Codable, Hashable, Sendable {
+        var question: String
+        /// A word or two above it: "Approach".
+        var header: String?
+        var options: [Option]
+        var multiSelect = false
+
+        struct Option: Codable, Hashable, Sendable {
+            var label: String
+            var description: String?
+        }
+    }
+
+    /// An answer from the board or the iPhone.
+    enum Reply: Hashable, Sendable {
+        case allow, deny
+        /// Each question's answer, by its text: an option's label, several joined with ", ", or your own words.
+        case answers([String: String])
+    }
+
+    var isQuestion: Bool { questions?.isEmpty == false }
 
     func isOpen(at now: Date) -> Bool { now < until }
+
+    /// The answer to a question from what you picked and typed: the chosen labels in their order,
+    /// with your own words after them (or instead, when only one may be picked).
+    static func answer(to question: Question, chosen: Set<String>, typed: String) -> String? {
+        let typed = typed.trimmingCharacters(in: .whitespacesAndNewlines)
+        let labels = question.options.map(\.label).filter(chosen.contains)
+        if !question.multiSelect { return typed.isEmpty ? labels.first : typed }
+        let all = labels + (typed.isEmpty ? [] : [typed])
+        return all.isEmpty ? nil : all.joined(separator: ", ")
+    }
 }
 
 /// Work a session started to come back to: a background command, an async agent, a monitor, a

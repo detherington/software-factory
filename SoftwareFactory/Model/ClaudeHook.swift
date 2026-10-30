@@ -142,8 +142,15 @@ extension ProjectStore {
                 }
 
             case "PermissionRequest":
-                // Questions and plans come by PreToolUse, in their own words.
-                guard tool != "AskUserQuestion", tool != "ExitPlanMode" else { break }
+                // Plans come by PreToolUse, in their own words; so do questions, which the board can
+                // answer while the hook waits.
+                guard tool != "ExitPlanMode" else { break }
+                if tool == "AskUserQuestion" {
+                    guard let until = permissionUntil, let questions = HookText.questions(in: input) else { break }
+                    s.permission = PermissionAsk(id: UUID().uuidString, tool: tool, summary: questions[0].question, asked: now,
+                                                 until: until, questions: questions)
+                    break
+                }
                 let words = HookText.permission(tool: tool, input: input)
                 set(.waiting)
                 s.message = words.message
@@ -415,9 +422,23 @@ nonisolated enum HookText {
     static func settles(_ ask: PermissionAsk, event: String, tool: String, input: [String: Any]) -> Bool {
         switch event {
         case "PermissionRequest", "UserPromptSubmit", "Stop", "StopFailure", "SessionStart", "SessionEnd": true
-        case "PostToolUse": tool == ask.tool && permission(tool: tool, input: input).summary == ask.summary
+        // A session asks one question at a time.
+        case "PostToolUse": tool == ask.tool && (ask.isQuestion || permission(tool: tool, input: input).summary == ask.summary)
         default: false
         }
+    }
+
+    /// AskUserQuestion's questions, with their options; nil if it has none the board can show.
+    static func questions(in input: [String: Any]) -> [PermissionAsk.Question]? {
+        let questions = (input["questions"] as? [[String: Any]] ?? []).compactMap { item -> PermissionAsk.Question? in
+            guard let text = item["question"] as? String else { return nil }
+            let options = (item["options"] as? [[String: Any]] ?? []).compactMap { option in
+                (option["label"] as? String).map { PermissionAsk.Question.Option(label: $0, description: option["description"] as? String) }
+            }
+            return PermissionAsk.Question(question: text, header: item["header"] as? String, options: options,
+                                          multiSelect: item["multiSelect"] as? Bool ?? false)
+        }
+        return questions.isEmpty ? nil : questions
     }
 
     /// What a tool call did, in a few words: "Editing Theme.swift".

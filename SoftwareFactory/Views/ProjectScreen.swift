@@ -133,8 +133,8 @@ private struct NowPanel: View {
                         .textSelection(.enabled)
                 }
                 if let ask = project.openPermission(at: now)?.ask {
-                    PermissionPrompt(ask: ask, onFlood: true, answerable: PermissionDesk.shared.isWaiting(for: ask.id)) { allow in
-                        store.answerPermission(ask.id, allow: allow, from: String(localized: "this Mac"))
+                    PermissionPrompt(ask: ask, onFlood: true, answerable: PermissionDesk.shared.isWaiting(for: ask.id)) { reply in
+                        store.answerPermission(ask.id, reply: reply, from: String(localized: "this Mac"))
                     }
                     .frame(maxWidth: 760, alignment: .leading)
                     .padding(.top, 6)

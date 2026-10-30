@@ -149,10 +149,11 @@ final class PhoneBoard {
 
     /// Answers a permission prompt: the Mac whose hook waits for it reads the answer from the inbox
     /// within a few seconds, and passes it to Claude Code.
-    func answer(_ ask: PermissionAsk, allow: Bool, in project: Project) {
-        answeredPermissions[ask.id] = allow
+    func answer(_ ask: PermissionAsk, reply: PermissionAsk.Reply, in project: Project) {
+        let answers: [String: String]? = if case .answers(let answers) = reply { answers } else { nil }
+        answeredPermissions[ask.id] = reply != .deny
         send(CloudBoard.Change(kind: .permission, project: project.id, projectName: project.name,
-                               permission: ask.id, allow: allow, answered: .now))
+                               permission: ask.id, allow: reply != .deny, answered: .now, answers: answers))
     }
 
     /// Answers a prompt from its alert's Allow or Deny, perhaps with the app in the background: done
@@ -169,7 +170,7 @@ final class PhoneBoard {
         let open = Set(projects.flatMap { $0.sessions.compactMap { $0.permission?.isOpen(at: now) == true ? $0.permission?.id : nil } })
         let center = UNUserNotificationCenter.current()
         let settled = await center.deliveredNotifications().filter { notification in
-            guard let ask = PermissionAlert.ask(in: notification.request.content.userInfo) else { return false }
+            guard let ask = PermissionAlert.prompt(in: notification.request.content.userInfo) else { return false }
             return !open.contains(ask) && now.timeIntervalSince(notification.date) > 60
         }
         center.removeDeliveredNotifications(withIdentifiers: settled.map(\.request.identifier))

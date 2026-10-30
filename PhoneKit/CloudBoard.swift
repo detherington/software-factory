@@ -175,10 +175,12 @@ nonisolated enum CloudBoard {
         /// A nudge snoozed, and until when.
         var nudge: String?
         var snooze: DigestState.Snooze?
-        /// A permission prompt answered: its id, whether to allow it, and when.
+        /// A permission prompt answered: its id, whether to allow it, and when; or a question
+        /// answered, with its answers by the question's text.
         var permission: String?
         var allow: Bool?
         var answered: Date?
+        var answers: [String: String]?
     }
 
     static func record(for change: Change) throws -> CKRecord {

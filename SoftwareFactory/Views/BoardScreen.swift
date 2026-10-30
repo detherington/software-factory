@@ -133,8 +133,8 @@ struct LiveCard: View {
                     .multilineTextAlignment(.leading)
             }
             if let ask = permission?.ask {
-                PermissionPrompt(ask: ask, onFlood: true, answerable: PermissionDesk.shared.isWaiting(for: ask.id)) { allow in
-                    store.answerPermission(ask.id, allow: allow, from: String(localized: "this Mac"))
+                PermissionPrompt(ask: ask, onFlood: true, answerable: PermissionDesk.shared.isWaiting(for: ask.id), compact: true) { reply in
+                    store.answerPermission(ask.id, reply: reply, from: String(localized: "this Mac"))
                 }
                 .padding(.top, 4)
             }

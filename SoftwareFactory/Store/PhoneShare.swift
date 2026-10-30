@@ -319,7 +319,8 @@ final class PhoneShare {
         case .permission:
             guard let id = change.permission, let allow = change.allow else { return true }
             let known = store.local.values.contains { $0.sessions.contains { $0.permission?.id == id } }
-            let answered = store.answerPermission(id, allow: allow, from: String(localized: "the iPhone"))
+            let reply: PermissionAsk.Reply = change.answers.map { .answers($0) } ?? (allow ? .allow : .deny)
+            let answered = store.answerPermission(id, reply: reply, from: String(localized: "the iPhone"))
             // One this Mac never had is another Mac's to answer, for as long as its hook could wait.
             return answered || known || now.timeIntervalSince(change.answered ?? .distantPast) > ClaudeSetup.permissionWait
         }
@@ -390,7 +391,7 @@ final class PhoneShare {
         for project in projects where !project.hidden {
             for session in project.liveSessions(at: now) where [.waiting, .yourCall, .blocked].contains(session.state) {
                 if let ask = session.permission, ask.isOpen(at: now) {
-                    let id = PermissionAlert.recordName(for: ask.id)
+                    let id = ask.isQuestion ? PermissionAlert.questionRecordName(for: ask.id) : PermissionAlert.recordName(for: ask.id)
                     guard !sent.contains(id) else { continue }
                     let (title, body) = PermissionDesk.alert(for: ask, in: session, project: project)
                     alerts.append(Alert(id: id, title: title, body: body, project: project.id))

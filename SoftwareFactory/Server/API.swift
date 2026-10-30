@@ -144,10 +144,16 @@ enum API {
                 let project = store.applyClaudeHook(payload, machine: machine)
                 return .json(Data("{\"ok\":true,\"project\":\(project.map { "\"\($0.id)\"" } ?? "null")}".utf8))
             case ("POST", "api/permissions/*"):
-                guard let body = try JSONSerialization.jsonObject(with: request.body) as? [String: Any], let allow = body["allow"] as? Bool else {
-                    return .error(400, "Send {\"allow\": true} or {\"allow\": false}.")
+                let body = try JSONSerialization.jsonObject(with: request.body) as? [String: Any]
+                let reply: PermissionAsk.Reply
+                if let answers = body?["answers"] as? [String: String] {
+                    reply = .answers(answers)
+                } else if let allow = body?["allow"] as? Bool {
+                    reply = allow ? .allow : .deny
+                } else {
+                    return .error(400, "Send {\"allow\": true} or {\"allow\": false}, or a question's answers: {\"answers\": {\"<question>\": \"<label>\"}}.")
                 }
-                let answered = store.answerPermission(key, allow: allow, from: machine ?? String(localized: "this Mac"))
+                let answered = store.answerPermission(key, reply: reply, from: machine ?? String(localized: "this Mac"))
                 return .json(Data("{\"answered\":\(answered)}".utf8))
             case ("GET", "api/prompts"):
                 // Saved prompts: those for every project, and each project's own.
@@ -248,6 +254,8 @@ enum API {
         let project = store.applyClaudeHook(payload, machine: machine, permissionUntil: until)
         let sessionID = payload["session_id"] as? String
         guard let until, let ask = project?.sessions.first(where: { $0.id == sessionID })?.permission else { return .text("") }
+        // A question's answers go back inside its input.
+        let input = (payload["tool_input"] as? [String: Any]).flatMap { try? JSONSerialization.data(withJSONObject: $0) }
         PhoneShare.shared.permissionAsked()
         var response = HTTPResponse.text("")
         response.later = {
@@ -256,7 +264,7 @@ enum API {
                 await store.permissionLapsed(ask.id)
                 return .text("")
             }
-            return .json(PermissionDesk.decision(answer))
+            return .json(PermissionDesk.decision(answer, input: input))
         }
         return response
     }

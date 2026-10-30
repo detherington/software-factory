@@ -216,8 +216,8 @@ private struct Now: View {
                         .foregroundStyle(Switchyard.ink.opacity(0.8))
                 }
                 if let ask = project.openPermission(at: now)?.ask {
-                    PermissionPrompt(ask: ask, onFlood: true, sent: board.answeredPermissions[ask.id]) { allow in
-                        board.answer(ask, allow: allow, in: project)
+                    PermissionPrompt(ask: ask, onFlood: true, sent: board.answeredPermissions[ask.id]) { reply in
+                        board.answer(ask, reply: reply, in: project)
                     }
                     .padding(.top, 8)
                     if let session = project.openable(at: now) {

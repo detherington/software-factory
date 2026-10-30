@@ -59,6 +59,8 @@ final class Notifier {
         var screen: String?
         /// A permission prompt it's about, which its Allow and Deny answer.
         var permission: String?
+        /// A question it's about, which its options' buttons and Reply answer.
+        var question: String?
     }
 
     private(set) var authorization: UNAuthorizationStatus = .notDetermined
@@ -162,7 +164,7 @@ final class Notifier {
                         // A permission prompt says what it would do, in full, for Allow and Deny to answer.
                         if kind == .needsYou, let ask = session.permission, ask.isOpen(at: now) {
                             (notice.title, notice.body) = PermissionDesk.alert(for: ask, in: session, project: project)
-                            notice.permission = ask.id
+                            if ask.isQuestion { notice.question = ask.id } else { notice.permission = ask.id }
                         }
                         notices.append((notice, true, kind.urgent))
                     }
@@ -275,7 +277,7 @@ final class Notifier {
 
     /// Sends what's queued: one by one, or a burst (a board catching up, several sessions at once) as one.
     private func send() {
-        let notices = queue
+        let notices = queue.map { (notice: $0.notice.withOpenAsk(), standing: $0.standing, sound: $0.sound) }
         queue = []
         flush = nil
         guard notices.count > 3 else {
@@ -326,17 +328,57 @@ final class Notifier {
             content.userInfo[PermissionAlert.key] = ask
         }
         if sound, playsSound { content.sound = .default }
-        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: notice.key, content: content, trigger: nil))
+        let request = UNNotificationRequest(identifier: notice.key, content: content, trigger: nil)
+        // A question a hook here waits on gets its options as buttons, in a category of its own.
+        if let id = notice.question, PermissionDesk.shared.isWaiting(for: id),
+           let questions = ProjectStore.shared.local.values.lazy.flatMap(\.sessions).first(where: { $0.permission?.id == id })?.permission?.questions {
+            content.userInfo[PermissionAlert.key] = id
+            Task {
+                content.categoryIdentifier = await Self.register(questions, for: id)
+                try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: notice.key, content: content, trigger: nil))
+            }
+            return
+        }
+        UNUserNotificationCenter.current().add(request)
+    }
+
+    /// A question's notification category: one button per option for a question with one answer,
+    /// and Reply for your own words. Earlier questions' categories go, but for those still open.
+    private static func register(_ questions: [PermissionAsk.Question], for id: String) async -> String {
+        let center = UNUserNotificationCenter.current()
+        let identifier = "question.\(id)"
+        var actions: [UNNotificationAction] = []
+        if questions.count == 1, !questions[0].multiSelect {
+            actions = questions[0].options.prefix(8).enumerated().map { index, option in
+                UNNotificationAction(identifier: "option.\(index)", title: option.label, options: [])
+            }
+        }
+        if questions.count == 1 {
+            actions.append(UNTextInputNotificationAction(identifier: "reply", title: String(localized: "Reply…"), options: [],
+                                                         textInputButtonTitle: String(localized: "Answer"),
+                                                         textInputPlaceholder: String(localized: "Your answer")))
+        }
+        actions.append(UNNotificationAction(identifier: "open-chat", title: String(localized: "Open Chat"), options: [.foreground]))
+        let open = Set(ProjectStore.shared.local.values.flatMap(\.sessions).compactMap { $0.permission?.id }.map { "question.\($0)" })
+        var categories = await center.notificationCategories().filter { !$0.identifier.hasPrefix("question.") || open.contains($0.identifier) }
+        categories.insert(UNNotificationCategory(identifier: identifier, actions: actions, intentIdentifiers: []))
+        center.setNotificationCategories(categories)
+        return identifier
     }
 
     // MARK: - Answering
 
     /// A click, or a button: the session's Claude Desktop chat when it has one, else the board.
     /// Allow and Deny answer a permission prompt where it is.
-    func respond(action: String, project id: String, session sessionID: String, screen: String, permission: String? = nil) {
+    func respond(action: String, project id: String, session sessionID: String, screen: String, permission: String? = nil, text: String? = nil) {
         let store = ProjectStore.shared
         if let permission, action == PermissionAlert.allow || action == PermissionAlert.deny {
             store.answerPermission(permission, allow: action == PermissionAlert.allow, from: String(localized: "this Mac"))
+            return
+        }
+        // A question's option, or your own words.
+        if let permission, let answers = Self.answers(action: action, text: text, to: permission, in: store) {
+            store.answerPermission(permission, reply: .answers(answers), from: String(localized: "this Mac"))
             return
         }
         if screen == "today" {
@@ -353,5 +395,31 @@ final class Notifier {
         if !id.isEmpty { Navigator.shared.open(id) } else { Navigator.shared.selection = .board }
         Navigator.shared.openBoard?()
         NSApplication.shared.activate()
+    }
+
+    /// What a question notification's button ("option.1") or Reply (`text`) answers, by question.
+    static func answers(action: String, text: String?, to id: String, in store: ProjectStore) -> [String: String]? {
+        guard let question = store.local.values.lazy.flatMap(\.sessions).first(where: { $0.permission?.id == id })?.permission?.questions?.first else { return nil }
+        if action == "reply", let text = text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty {
+            return [question.question: text]
+        }
+        guard action.hasPrefix("option."), let index = Int(action.dropFirst("option.".count)), question.options.indices.contains(index) else { return nil }
+        return [question.question: question.options[index].label]
+    }
+}
+
+extension Notifier.Notice {
+    /// A question's PermissionRequest comes just after its PreToolUse made the session wait, so by
+    /// the time the notice goes, the board may be able to answer it: then it says so, with buttons.
+    @MainActor
+    func withOpenAsk(in store: ProjectStore = .shared, now: Date = .now) -> Self {
+        guard kind == Notifier.Kind.needsYou.rawValue, permission == nil, question == nil,
+              let sessionID = session, let project = store[project],
+              let session = project.sessions.first(where: { $0.id == sessionID }),
+              let ask = session.permission, ask.isOpen(at: now) else { return self }
+        var notice = self
+        (notice.title, notice.body) = PermissionDesk.alert(for: ask, in: session, project: project)
+        if ask.isQuestion { notice.question = ask.id } else { notice.permission = ask.id }
+        return notice
     }
 }

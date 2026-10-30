@@ -15,6 +15,17 @@ nonisolated enum PermissionAlert {
 
     static func recordName(for ask: String) -> String { prefix + ask }
 
+    /// A question's alert, which has no Allow or Deny: tapping it opens the project, to choose there.
+    static func questionRecordName(for ask: String) -> String { questionPrefix + ask }
+    private static let questionPrefix = "question."
+
+    /// The prompt or question an alert is about, to clear it once it's settled; nil for any other.
+    static func prompt(in userInfo: [AnyHashable: Any]) -> String? {
+        if let ask = ask(in: userInfo) { return ask }
+        let name = (CKNotification(fromRemoteNotificationDictionary: userInfo) as? CKQueryNotification)?.recordID?.recordName
+        return name.flatMap { $0.hasPrefix(questionPrefix) ? String($0.dropFirst(questionPrefix.count)) : nil }
+    }
+
     /// The prompt an alert's record is for; nil for any other alert.
     static func ask(fromRecordName name: String) -> String? {
         name.hasPrefix(prefix) ? String(name.dropFirst(prefix.count)) : nil

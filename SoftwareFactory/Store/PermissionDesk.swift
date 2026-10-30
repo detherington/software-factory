@@ -10,6 +10,8 @@ import Foundation
 /// - In Terminal, Claude Code may not show its prompt until the hook is done, so the board waits only
 ///   once you've been away from every Mac for five minutes, and leaves it to Terminal otherwise.
 /// - Nothing waits past `ClaudeSetup.permissionWait`; then only Claude's own prompt can answer.
+/// - Claude's questions (AskUserQuestion) come the same way, and are answered with the options you
+///   choose, which Claude Code takes as your answers.
 @MainActor
 @Observable
 final class PermissionDesk {
@@ -19,6 +21,8 @@ final class PermissionDesk {
         var allow: Bool
         /// Where it was given: "this Mac", "the iPhone".
         var from: String
+        /// A question's answers, by the question's text.
+        var answers: [String: String]? = nil
     }
 
     /// Settings › Claude Code: on unless turned off.
@@ -40,9 +44,9 @@ final class PermissionDesk {
     }
 
     /// How long a hook should wait for an answer from the board, or nil to leave the prompt to Claude.
-    /// Questions and plans aren't permissions: they're answered in Claude.
+    /// A plan is reviewed in Claude.
     nonisolated static func wait(tool: String, entrypoint: String?, away: Bool, isOn: Bool) -> TimeInterval? {
-        guard isOn, tool != "AskUserQuestion", tool != "ExitPlanMode" else { return nil }
+        guard isOn, tool != "ExitPlanMode" else { return nil }
         return hostsItsOwnPrompt(entrypoint) || away ? ClaudeSetup.permissionWait : nil
     }
 
@@ -85,15 +89,28 @@ final class PermissionDesk {
     /// A prompt's notification, on the Mac and the iPhone: whose it is, and what it would do in full,
     /// under Claude's description of it (or what it asks), since the answer can be given right there.
     nonisolated static func alert(for ask: PermissionAsk, in session: Session, project: Project) -> (title: String, body: String) {
+        // A question: what it asks, and the options to pick from.
+        if let question = ask.questions?.first {
+            let more = (ask.questions?.count ?? 1) > 1 ? String(localized: " (and \((ask.questions?.count ?? 1) - 1) more)") : ""
+            return (String(localized: "\(project.name) asks"),
+                    [question.question + more, question.options.map(\.label).joined(separator: " · ")].filter { !$0.isEmpty }.joined(separator: "\n"))
+        }
         let what = ask.detail ?? session.message
         return (String(localized: "\(project.name) needs your permission"),
                 [what, ask.summary].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "\n"))
     }
 
-    /// What the hook prints for Claude Code: allow, or deny with where it was denied.
-    nonisolated static func decision(_ answer: Answer) -> Data {
+    /// What the hook prints for Claude Code: allow, or deny with where it was denied. A question's
+    /// answers go back in the tool's input (`input`, as Claude Code sent it), which is how Claude Code
+    /// takes answers from outside.
+    nonisolated static func decision(_ answer: Answer, input: Data? = nil) -> Data {
         var decision: [String: Any] = ["behavior": answer.allow ? "allow" : "deny"]
         if !answer.allow { decision["message"] = "The user denied this in Software Factory, on \(answer.from)." }
+        if let answers = answer.answers {
+            var updated = input.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
+            updated["answers"] = answers
+            decision["updatedInput"] = updated
+        }
         let output: [String: Any] = ["hookSpecificOutput": ["hookEventName": "PermissionRequest", "decision": decision]]
         return (try? JSONSerialization.data(withJSONObject: output, options: [.sortedKeys])) ?? Data()
     }
@@ -104,7 +121,19 @@ extension ProjectStore {
     /// not, it was answered in Claude or its time ran out, and the prompt leaves the board.
     @discardableResult
     func answerPermission(_ id: String, allow: Bool, from: String) -> Bool {
-        let answered = PermissionDesk.shared.settle(id, with: PermissionDesk.Answer(allow: allow, from: from))
+        answerPermission(id, reply: allow ? .allow : .deny, from: from)
+    }
+
+    /// Answers prompt `id`, or its questions.
+    @discardableResult
+    func answerPermission(_ id: String, reply: PermissionAsk.Reply, from: String) -> Bool {
+        let answers: [String: String]? = if case .answers(let answers) = reply { answers } else { nil }
+        // A question takes answers: an older iPhone's Allow or Deny leaves it to be answered.
+        if answers == nil, local.values.contains(where: { $0.sessions.contains { $0.permission?.id == id && $0.permission?.isQuestion == true } }) {
+            return false
+        }
+        let allow = reply != .deny
+        let answered = PermissionDesk.shared.settle(id, with: PermissionDesk.Answer(allow: allow, from: from, answers: answers))
         guard let project = local.values.first(where: { $0.sessions.contains { $0.permission?.id == id } }) else { return answered }
         update(project.id) { p in
             guard let index = p.sessions.firstIndex(where: { $0.permission?.id == id }), let ask = p.sessions[index].permission else { return }
@@ -115,6 +144,12 @@ extension ProjectStore {
             p.sessions[index].since = now
             p.sessions[index].updated = now
             p.sessions[index].message = nil
+            if let answers {
+                let said = ask.questions?.compactMap { answers[$0.question] }.joined(separator: " · ")
+                p.log(Event(date: now, state: .working, symbol: "text.bubble.fill", title: String(localized: "Answered on \(from)"),
+                            detail: [ask.summary, said].compactMap { $0 }.joined(separator: ": ")))
+                return
+            }
             p.log(Event(date: now, state: allow ? .working : nil, symbol: allow ? "checkmark.shield.fill" : "xmark.shield.fill",
                         title: allow ? String(localized: "Allowed on \(from)") : String(localized: "Denied on \(from)"), detail: ask.summary))
         }
