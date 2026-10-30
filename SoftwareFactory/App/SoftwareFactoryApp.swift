@@ -92,8 +92,9 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         let project = info["project"] as? String ?? ""
         let session = info["session"] as? String ?? ""
         let screen = info["screen"] as? String ?? ""
+        let permission = info[PermissionAlert.key] as? String
         let action = response.actionIdentifier
-        await MainActor.run { Notifier.shared.respond(action: action, project: project, session: session, screen: screen) }
+        await MainActor.run { Notifier.shared.respond(action: action, project: project, session: session, screen: screen, permission: permission) }
     }
 }
 

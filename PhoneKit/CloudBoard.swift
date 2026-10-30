@@ -220,6 +220,8 @@ nonisolated enum CloudBoard {
         info.alertLocalizationArgs = [Field.body]
         info.soundName = "default"
         info.desiredKeys = [Field.project]
+        // So the iPhone's notification extension can give a permission prompt's alert Allow and Deny.
+        info.shouldSendMutableContent = true
         subscription.notificationInfo = info
         return subscription
     }

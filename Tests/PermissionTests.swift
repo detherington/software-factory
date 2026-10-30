@@ -222,6 +222,55 @@ struct PermissionTests {
         #expect(CloudBoard.phoneCopy(project).sessions.first { $0.id == id }?.permission?.summary == "git push origin main")
     }
 
+    // MARK: - Notifications
+
+    @Test func aPromptsNotificationSaysWhatItWouldDo() throws {
+        let id = UUID().uuidString
+        let project = try #require(ask(id))
+        let session = try #require(project.sessions.first { $0.id == id })
+        let alert = PermissionDesk.alert(for: try #require(session.permission), in: session, project: project)
+        #expect(alert.title == "Moth Radio needs your permission")
+        #expect(alert.body == "Push to GitHub\ngit push origin main")
+    }
+
+    /// Away from your Macs, a prompt goes to the iPhone at once; anything else that needs you after
+    /// two minutes.
+    @Test func aPromptAlertsTheIPhoneAtOnce() throws {
+        let id = UUID().uuidString
+        let project = try #require(ask(id))
+        let alertID = PermissionAlert.recordName(for: try #require(project.sessions.first { $0.id == id }?.permission?.id))
+        let now = Date.now
+        #expect(PhoneShare.alertsDue(in: [project], now: now, sent: []).map(\.id) == [alertID])
+        #expect(PhoneShare.alertsDue(in: [project], now: now, sent: [alertID]).isEmpty)
+        var asking = project
+        asking.sessions = asking.sessions.map { var session = $0; session.permission = nil; return session }
+        #expect(PhoneShare.alertsDue(in: [asking], now: now, sent: []).isEmpty)
+        #expect(PhoneShare.alertsDue(in: [asking], now: now.addingTimeInterval(PhoneShare.alertDelay + 1), sent: []).count == 1)
+    }
+
+    /// The iPhone's extension knows a prompt's alert by its record's name, as iCloud pushes it.
+    @Test func anAlertKnowsItsPrompt() {
+        #expect(PermissionAlert.ask(fromRecordName: PermissionAlert.recordName(for: "ABC")) == "ABC")
+        #expect(PermissionAlert.ask(fromRecordName: "s1.waiting.1793300000") == nil)
+        #expect(PermissionAlert.ask(in: [PermissionAlert.key: "ABC"]) == "ABC")
+        let push: [AnyHashable: Any] = [
+            "aps": ["mutable-content": 1, "alert": ["title": "Moth Radio needs your permission"]],
+            "ck": ["ce": 2, "cid": "iCloud.com.darrell.softwarefactory", "nid": UUID().uuidString,
+                   "qry": ["dbs": 1, "fo": 1, "rid": "permission.ABC", "sid": "alerts", "zid": "_defaultZone", "zoid": "_defaultOwner",
+                           "af": ["project": "moth-radio"]]],
+        ]
+        #expect(PermissionAlert.ask(in: push) == "ABC")
+        var other = push
+        other["ck"] = ["ce": 2, "cid": "iCloud.com.darrell.softwarefactory", "nid": UUID().uuidString,
+                       "qry": ["dbs": 1, "fo": 1, "rid": "s1.waiting.1793300000", "sid": "alerts", "zid": "_defaultZone", "zoid": "_defaultOwner"]]
+        #expect(PermissionAlert.ask(in: other) == nil)
+    }
+
+    /// Alerts arrive changeable, so the extension can add the buttons.
+    @Test func alertsCanBeGivenButtons() {
+        #expect(CloudBoard.alertsSubscription().notificationInfo?.shouldSendMutableContent == true)
+    }
+
     // MARK: - Installing the hook
 
     @Test func theHookIsInstalledToWait() throws {

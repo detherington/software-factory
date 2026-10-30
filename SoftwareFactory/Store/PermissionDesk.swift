@@ -82,6 +82,14 @@ final class PermissionDesk {
         return true
     }
 
+    /// A prompt's notification, on the Mac and the iPhone: whose it is, and what it would do in full,
+    /// under Claude's description of it (or what it asks), since the answer can be given right there.
+    nonisolated static func alert(for ask: PermissionAsk, in session: Session, project: Project) -> (title: String, body: String) {
+        let what = ask.detail ?? session.message
+        return (String(localized: "\(project.name) needs your permission"),
+                [what, ask.summary].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "\n"))
+    }
+
     /// What the hook prints for Claude Code: allow, or deny with where it was denied.
     nonisolated static func decision(_ answer: Answer) -> Data {
         var decision: [String: Any] = ["behavior": answer.allow ? "allow" : "deny"]

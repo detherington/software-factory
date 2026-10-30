@@ -117,6 +117,7 @@ final class PhoneBoard {
             problem = nil
             reapplyPending()
             saveCache()
+            await clearSettledAlerts()
         } catch {
             problem = Self.describe(error)
         }
@@ -152,6 +153,26 @@ final class PhoneBoard {
         answeredPermissions[ask.id] = allow
         send(CloudBoard.Change(kind: .permission, project: project.id, projectName: project.name,
                                permission: ask.id, allow: allow, answered: .now))
+    }
+
+    /// Answers a prompt from its alert's Allow or Deny, perhaps with the app in the background: done
+    /// once the answer is in the inbox.
+    func answer(ask: String, allow: Bool, project: String?) async {
+        answeredPermissions[ask] = allow
+        await save(CloudBoard.Change(kind: .permission, project: project, permission: ask, allow: allow, answered: .now))
+    }
+
+    /// Alerts for prompts settled since (answered anywhere, or their time up) leave Notification
+    /// Center. One that just came may be newer than the board fetched, so it stays a minute.
+    private func clearSettledAlerts() async {
+        let now = Date.now
+        let open = Set(projects.flatMap { $0.sessions.compactMap { $0.permission?.isOpen(at: now) == true ? $0.permission?.id : nil } })
+        let center = UNUserNotificationCenter.current()
+        let settled = await center.deliveredNotifications().filter { notification in
+            guard let ask = PermissionAlert.ask(in: notification.request.content.userInfo) else { return false }
+            return !open.contains(ask) && now.timeIntervalSince(notification.date) > 60
+        }
+        center.removeDeliveredNotifications(withIdentifiers: settled.map(\.request.identifier))
     }
 
     /// Hides a nudge from Today, here and on the Macs, for a day or a week.
@@ -216,17 +237,19 @@ final class PhoneBoard {
 
     /// Puts a change in the inbox, for the Macs.
     private func send(_ change: CloudBoard.Change) {
+        Task { await save(change) }
+    }
+
+    private func save(_ change: CloudBoard.Change) async {
         guard sample == nil, let database = CloudBoard.container?.privateCloudDatabase else { return }
-        Task {
-            do {
-                if !inboxReady {
-                    _ = try await database.modifyRecordZones(saving: [CKRecordZone(zoneID: CloudBoard.inboxZoneID)], deleting: [])
-                    inboxReady = true
-                }
-                _ = try await database.save(CloudBoard.record(for: change))
-            } catch {
-                problem = String(localized: "Couldn't send that to your Macs: \(Self.describe(error))")
+        do {
+            if !inboxReady {
+                _ = try await database.modifyRecordZones(saving: [CKRecordZone(zoneID: CloudBoard.inboxZoneID)], deleting: [])
+                inboxReady = true
             }
+            _ = try await database.save(CloudBoard.record(for: change))
+        } catch {
+            problem = String(localized: "Couldn't send that to your Macs: \(Self.describe(error))")
         }
     }
 

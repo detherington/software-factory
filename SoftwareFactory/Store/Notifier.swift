@@ -56,6 +56,8 @@ final class Notifier {
         var session: String?
         /// The screen a click opens, when it isn't a project's: "today".
         var screen: String?
+        /// A permission prompt it's about, which its Allow and Deny answer.
+        var permission: String?
     }
 
     private(set) var authorization: UNAuthorizationStatus = .notDetermined
@@ -117,9 +119,13 @@ final class Notifier {
         center.delegate = delegate
         let openChat = UNNotificationAction(identifier: "open-chat", title: String(localized: "Open Chat"), options: [.foreground])
         let showBoard = UNNotificationAction(identifier: "show-board", title: String(localized: "Show on Board"), options: [.foreground])
+        // Allow and Deny answer without bringing the app forward.
+        let allow = UNNotificationAction(identifier: PermissionAlert.allow, title: String(localized: "Allow"), options: [])
+        let deny = UNNotificationAction(identifier: PermissionAlert.deny, title: String(localized: "Deny"), options: [.destructive])
         center.setNotificationCategories([
             UNNotificationCategory(identifier: "session", actions: [openChat, showBoard], intentIdentifiers: []),
             UNNotificationCategory(identifier: "project", actions: [showBoard], intentIdentifiers: []),
+            UNNotificationCategory(identifier: PermissionAlert.category, actions: [allow, deny, openChat], intentIdentifiers: []),
         ])
         Task {
             _ = try? await center.requestAuthorization(options: [.alert, .sound, .badge])
@@ -151,7 +157,13 @@ final class Notifier {
                     let key = "\(session.id)|\(session.state.rawValue)|\(Int(session.since.timeIntervalSince1970))"
                     holding.insert(key)
                     if !seen.contains(key), fresh(session.since), isEnabled(kind) {
-                        notices.append((notice(kind, key: key, project: project, session: session, place: place), true, kind.urgent))
+                        var notice = notice(kind, key: key, project: project, session: session, place: place)
+                        // A permission prompt says what it would do, in full, for Allow and Deny to answer.
+                        if kind == .needsYou, let ask = session.permission, ask.isOpen(at: now) {
+                            (notice.title, notice.body) = PermissionDesk.alert(for: ask, in: session, project: project)
+                            notice.permission = ask.id
+                        }
+                        notices.append((notice, true, kind.urgent))
                     }
                     seen.insert(key)
                 }
@@ -294,6 +306,11 @@ final class Notifier {
         content.threadIdentifier = notice.project.isEmpty ? "summary" : notice.project
         content.categoryIdentifier = notice.screen != nil ? "screen" : notice.session == nil ? "project" : "session"
         content.userInfo = ["project": notice.project, "session": notice.session ?? "", "screen": notice.screen ?? ""]
+        // Allow and Deny only where a hook here waits for them: another Mac's prompts are answered there.
+        if let ask = notice.permission, PermissionDesk.shared.isWaiting(for: ask) {
+            content.categoryIdentifier = PermissionAlert.category
+            content.userInfo[PermissionAlert.key] = ask
+        }
         if sound, playsSound { content.sound = .default }
         UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: notice.key, content: content, trigger: nil))
     }
@@ -301,8 +318,13 @@ final class Notifier {
     // MARK: - Answering
 
     /// A click, or a button: the session's Claude Desktop chat when it has one, else the board.
-    func respond(action: String, project id: String, session sessionID: String, screen: String) {
+    /// Allow and Deny answer a permission prompt where it is.
+    func respond(action: String, project id: String, session sessionID: String, screen: String, permission: String? = nil) {
         let store = ProjectStore.shared
+        if let permission, action == PermissionAlert.allow || action == PermissionAlert.deny {
+            store.answerPermission(permission, allow: action == PermissionAlert.allow, from: String(localized: "this Mac"))
+            return
+        }
         if screen == "today" {
             Navigator.shared.selection = .today
             Navigator.shared.openBoard?()

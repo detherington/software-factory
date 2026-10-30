@@ -38,8 +38,8 @@ final class PhoneShare {
     private(set) var status: Status = .off
 
     /// How long something waits before the iPhone hears of it, and how long you must have been away.
-    static let alertDelay: TimeInterval = 120
-    static let awayAfter: TimeInterval = 300
+    nonisolated static let alertDelay: TimeInterval = 120
+    nonisolated static let awayAfter: TimeInterval = 300
 
     @ObservationIgnored private var loop: Task<Void, Never>?
     @ObservationIgnored private var pending: Task<Void, Never>?
@@ -245,31 +245,15 @@ final class PhoneShare {
     // MARK: - Alerts
 
     /// Saves an alert for each thing that has needed you for two minutes while you've been away from
-    /// every Mac for five. Each is named for what it's about, so two Macs saving it make one alert.
+    /// every Mac for five; a permission prompt, at once, which the iPhone can answer from the alert.
+    /// Each is named for what it's about, so two Macs saving it make one alert.
     private func sendAlerts() async {
         guard let database else { return }
         let now = Date.now
         let lastInput = [now.addingTimeInterval(-Presence.secondsSinceInput), otherMacsInput].compactMap { $0 }.max() ?? now
         guard pretendsAway || now.timeIntervalSince(lastInput) >= Self.awayAfter else { return }
-        let store = ProjectStore.shared
-        var alerts: [CKRecord] = []
-        for project in store.projects.values where !project.hidden {
-            for session in project.liveSessions(at: now) where [.waiting, .yourCall, .blocked].contains(session.state) {
-                guard now.timeIntervalSince(session.since) >= Self.alertDelay else { continue }
-                let id = "\(session.id).\(session.state.rawValue).\(Int(session.since.timeIntervalSince1970))"
-                guard state.alerts[id] == nil else { continue }
-                let (title, body) = Self.text(for: session.state, project: project, session: session)
-                alerts.append(CloudBoard.alert(id: id, title: title, body: body, project: project.id))
-            }
-            if project.reported == .blocked, now.timeIntervalSince(project.reportedAt) >= Self.alertDelay,
-               now.timeIntervalSince(project.reportedAt) < 86_400 {
-                let id = "\(project.id).blocked.\(Int(project.reportedAt.timeIntervalSince1970))"
-                if state.alerts[id] == nil {
-                    let (title, body) = Self.text(for: .blocked, project: project, session: nil)
-                    alerts.append(CloudBoard.alert(id: id, title: title, body: body, project: project.id))
-                }
-            }
-        }
+        let alerts = Self.alertsDue(in: Array(ProjectStore.shared.projects.values), now: now, sent: Set(state.alerts.keys))
+            .map { CloudBoard.alert(id: $0.id, title: $0.title, body: $0.body, project: $0.project) }
         guard !alerts.isEmpty else { return }
         do {
             // Only new records notify. One that another Mac saved first comes back as changed, which
@@ -295,6 +279,7 @@ final class PhoneShare {
     /// board now, and read the inbox every few seconds until nothing waits.
     func permissionAsked() {
         boardChanged(soon: true)
+        if sendsAlerts, database != nil { Task { await sendAlerts() } }
         guard isOn, database != nil, quickInbox == nil else { return }
         quickInbox = Task { [weak self] in
             while !Task.isCancelled, PermissionDesk.shared.isWaiting {
@@ -373,7 +358,9 @@ final class PhoneShare {
     private func subscribeToAlerts() async {
         guard let database, !hasAlertsSubscription else { return }
         guard let subscriptions = try? await database.allSubscriptions() else { return }
-        if subscriptions.contains(where: { $0.subscriptionID == CloudBoard.alertSubscription }) {
+        // One from before alerts could be changed on the iPhone (to add Allow and Deny) is replaced.
+        if let existing = subscriptions.first(where: { $0.subscriptionID == CloudBoard.alertSubscription }),
+           existing.notificationInfo?.shouldSendMutableContent == true {
             hasAlertsSubscription = true
             return
         }
@@ -385,7 +372,45 @@ final class PhoneShare {
         }
     }
 
-    private static func text(for state: ProjectState, project: Project, session: Session?) -> (String, String) {
+    struct Alert: Equatable {
+        var id: String
+        var title: String
+        var body: String
+        var project: String
+    }
+
+    /// The alerts due now, while you're away, that haven't gone (`sent`): a permission prompt at
+    /// once; anything else that needs you once it has for two minutes.
+    nonisolated static func alertsDue(in projects: [Project], now: Date, sent: Set<String>) -> [Alert] {
+        var alerts: [Alert] = []
+        for project in projects where !project.hidden {
+            for session in project.liveSessions(at: now) where [.waiting, .yourCall, .blocked].contains(session.state) {
+                if let ask = session.permission, ask.isOpen(at: now) {
+                    let id = PermissionAlert.recordName(for: ask.id)
+                    guard !sent.contains(id) else { continue }
+                    let (title, body) = PermissionDesk.alert(for: ask, in: session, project: project)
+                    alerts.append(Alert(id: id, title: title, body: body, project: project.id))
+                    continue
+                }
+                guard now.timeIntervalSince(session.since) >= alertDelay else { continue }
+                let id = "\(session.id).\(session.state.rawValue).\(Int(session.since.timeIntervalSince1970))"
+                guard !sent.contains(id) else { continue }
+                let (title, body) = text(for: session.state, project: project, session: session)
+                alerts.append(Alert(id: id, title: title, body: body, project: project.id))
+            }
+            if project.reported == .blocked, now.timeIntervalSince(project.reportedAt) >= alertDelay,
+               now.timeIntervalSince(project.reportedAt) < 86_400 {
+                let id = "\(project.id).blocked.\(Int(project.reportedAt.timeIntervalSince1970))"
+                if !sent.contains(id) {
+                    let (title, body) = text(for: .blocked, project: project, session: nil)
+                    alerts.append(Alert(id: id, title: title, body: body, project: project.id))
+                }
+            }
+        }
+        return alerts
+    }
+
+    nonisolated private static func text(for state: ProjectState, project: Project, session: Session?) -> (String, String) {
         let name = project.name
         switch state {
         case .yourCall: return (String(localized: "\(name): your call"), session?.ask ?? session?.message ?? "")

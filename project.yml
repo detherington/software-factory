@@ -38,6 +38,7 @@ targets:
       - path: SoftwareFactory
       - path: Shared
       - path: PhoneKit/CloudBoard.swift
+      - path: PhoneKit/PermissionAlert.swift
     dependencies:
       # The `factory` command-line tool ships inside the app (Contents/MacOS/factory);
       # Settings › Command-Line Tool links it into ~/.local/bin.
@@ -94,6 +95,7 @@ targets:
           - Resources
       - path: Shared
       - path: PhoneKit/CloudBoard.swift
+      - path: PhoneKit/PermissionAlert.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.darrell.softwarefactory.tests
@@ -132,6 +134,7 @@ targets:
       - path: Shared/JSONDates.swift
     dependencies:
       - target: SoftwareFactoryPhoneWidgets
+      - target: SoftwareFactoryPhoneNotifications
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.darrell.softwarefactory.ios
@@ -159,6 +162,29 @@ targets:
             CFBundleURLSchemes: [softwarefactory]
         FactoryCloudKitContainer: $(FACTORY_CLOUDKIT_CONTAINER)
         FactoryAppGroup: $(FACTORY_APP_GROUP)
+  # Gives a permission prompt's alert Allow and Deny (Notification Service Extension).
+  SoftwareFactoryPhoneNotifications:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: PhoneNotifications
+      - path: PhoneKit/PermissionAlert.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.darrell.softwarefactory.ios.notifications
+        PRODUCT_NAME: FactoryNotifications
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: NO
+    info:
+      path: PhoneNotifications/Info.plist
+      properties:
+        CFBundleDisplayName: Factory
+        CFBundleName: FactoryNotifications
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.usernotifications.service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
   SoftwareFactoryPhoneWidgets:
     type: app-extension
     platform: iOS
