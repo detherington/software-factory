@@ -21,6 +21,25 @@ struct HookStateTests {
         store.hook("PostToolUse", id, ["tool_name": "mcp__ccd_turn__wrap_up", "tool_input": input])
     }
 
+    /// `factory blocked` waits for you: your next prompt, in any of the project's sessions, means
+    /// it carries on. Volt Crystal read Blocked for half an hour while its session worked again.
+    @Test func aBlockedReportEndsWithYourNextPrompt() throws {
+        prompt("Build the iOS player")
+        let report = try JSONDecoder().decode(Report.self, from: Data(#"{"state": "blocked", "note": "Waiting on iOS Build Support"}"#.utf8))
+        try store.apply(report, to: TestBoard.projectID)
+        store.hook("Stop", id)
+        #expect(store[TestBoard.projectID]?.state(at: .now) == .blocked)
+        // The app waking the session with a background task's result isn't you.
+        store.hook("UserPromptSubmit", id, ["prompt": "<task-notification><status>completed</status></task-notification>"])
+        store.hook("Stop", id)
+        #expect(store[TestBoard.projectID]?.state(at: .now) == .blocked)
+
+        prompt("iOS Build Support is installed. Carry on with the task.")
+        #expect(store[TestBoard.projectID]?.state(at: .now) == .working)
+        store.hook("Stop", id)
+        #expect(store[TestBoard.projectID]?.state(at: .now) == .idle)
+    }
+
     @Test func aPromptIsWorkAndStopFinishesIt() {
         prompt("fix the page turn in the reader")
         #expect(store.session(id)?.state == .working)

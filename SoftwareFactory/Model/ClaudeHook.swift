@@ -83,6 +83,9 @@ extension ProjectStore {
                 if let task = HookText.task(from: prompt) {
                     s.appTurn = false
                     s.activity = nil
+                    // A blocked report waits for you: your next word to the project, in any of its
+                    // sessions, means it carries on, as a working report ends with its turn.
+                    if p.reported == .blocked { p.reported = .idle; p.reportedAt = now; p.lastReport = now }
                     // Short replies ("yes", "go ahead") carry on the task before them; a slash command is new work.
                     if task != s.task, s.task == nil || task.hasPrefix("/") || task.split(separator: " ").count >= 3 {
                         s.task = task

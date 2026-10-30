@@ -105,7 +105,7 @@ A project's state comes from its sessions (via hooks) and from reports (via the 
 5. Otherwise, if a session finished its turn but is waiting on work it started, it's in the **background**.
 6. Otherwise it's whatever the last report said.
 
-Sessions that go quiet stop counting: a working session after 20 minutes, a waiting one after 24 hours. A report of "working" lapses to idle after 45 quiet minutes or when the session's turn ends.
+Sessions that go quiet stop counting: a working session after 20 minutes, a waiting one after 24 hours. A report of "working" lapses to idle after 45 quiet minutes or when the session's turn ends. A report of "blocked" stands until your next prompt in any of the project's sessions: you've seen it, and the project carries on. The app waking a session (a background task's result) doesn't count.
 
 A path resolves to its project. Worktrees under `.claude/worktrees/` and linked git worktrees fold into their repository. A subfolder folds into the repository around it.
 
