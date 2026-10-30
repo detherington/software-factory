@@ -24,7 +24,9 @@ struct PhoneApp: App {
     }
 }
 
-final class PhoneDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
+/// UIKit calls its notification delegate on the main thread, before Swift's concurrency checking knew
+/// it (hence `@preconcurrency`).
+final class PhoneDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUserNotificationCenterDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         let center = UNUserNotificationCenter.current()
         center.delegate = self
@@ -51,8 +53,9 @@ final class PhoneDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCe
     }
 
     /// Tapping an alert opens its project; Allow or Deny answers its permission prompt, without opening
-    /// the app.
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+    /// the app. On the main actor: Swift hands UIKit's completion handler back from wherever this
+    /// finishes, and UIKit aborts if that isn't the main thread (tapping an alert from the Home Screen did).
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
         let info = response.notification.request.content.userInfo
         let notification = CKNotification(fromRemoteNotificationDictionary: info) as? CKQueryNotification
         let project = notification?.recordFields?[CloudBoard.Field.project] as? String
@@ -62,6 +65,6 @@ final class PhoneDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCe
             return
         }
         guard let project else { return }
-        await MainActor.run { PhoneBoard.shared.opened = project }
+        PhoneBoard.shared.opened = project
     }
 }
