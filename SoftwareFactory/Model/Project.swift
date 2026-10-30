@@ -395,7 +395,13 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
     var todos: [Todo]?
     /// Its app's bundle ID, from its Xcode project, and where the app stands in App Store Connect.
     var bundleID: String?
+    /// Every bundle ID its Xcode project declares, shortest first: App Store Connect may know its
+    /// iPhone app's and not its Mac app's.
+    var bundleIDs: [String]?
     var appStore: AppStoreStatus?
+
+    /// The bundle IDs to look for in App Store Connect.
+    var appBundleIDs: [String] { bundleIDs ?? bundleID.map { [$0] } ?? [] }
     var created: Date
     /// The newest sign of life from anywhere: a report, a hook, a transcript, a commit.
     var lastActivity: Date
@@ -440,6 +446,7 @@ struct Project: Codable, Identifiable, Hashable, Sendable {
         looseEnds = try c.decodeIfPresent([LooseEnds].self, forKey: .looseEnds)
         todos = try c.decodeIfPresent([Todo].self, forKey: .todos)
         bundleID = try c.decodeIfPresent(String.self, forKey: .bundleID)
+        bundleIDs = try c.decodeIfPresent([String].self, forKey: .bundleIDs)
         appStore = try c.decodeIfPresent(AppStoreStatus.self, forKey: .appStore)
         let created = try c.decodeIfPresent(Date.self, forKey: .created) ?? .now
         self.created = created

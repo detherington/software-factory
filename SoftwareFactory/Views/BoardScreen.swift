@@ -248,7 +248,7 @@ struct ProjectCard: View {
                     FlowChips {
                         if todos > 0 { StatusChip(text: String(localized: "\(todos) to do"), symbol: "checklist") }
                         LooseEndsChips(ends: ends)
-                        if let status = project.appStore { AppStoreChips(status: status) }
+                        if let status = project.appStore { AppStoreChips(status: status, now: now) }
                     }
                     .padding(.top, 2)
                 }

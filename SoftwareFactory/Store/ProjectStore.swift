@@ -634,7 +634,10 @@ final class ProjectStore {
                 if let readme = item.readme { p.readme = readme }
                 if let branch = item.branch { p.branch = branch }
                 p.looseEnds = item.looseEnds.isEmpty ? nil : item.looseEnds
-                if let bundleID = item.bundleID { p.bundleID = bundleID }
+                if let bundleID = item.bundleIDs.first {
+                    p.bundleID = bundleID
+                    p.bundleIDs = item.bundleIDs
+                }
                 if p.repo == nil { p.repo = item.repo }
                 let known = Set(p.events.compactMap(\.ref))
                 var added = false

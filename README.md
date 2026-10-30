@@ -31,11 +31,12 @@ A status board for every coding project on this Mac: what's being worked on, wha
   - **Background work finished:** a background command or agent.
   - **Shipped:** a release.
   - **TestFlight build ready:** a build has finished processing and can be tested.
+  - **TestFlight crash or feedback:** a tester sent a crash or screenshots, with their comment.
   - **Turn finished:** a turn that ended without a question. Off by default.
   - **A reminder after an hour:** the same notice again, with a sound, when something has waited on you for an hour. Off by default.
 
   Clicking one opens the session's Claude Desktop chat when it has one, and the board otherwise; **Open Chat** and **Show on Board** do the same from the notification. Notifications are grouped by project, several arriving together come as one, and a "needs you" leaves Notification Center once it's answered. Sessions on other Macs notify too, labeled with the Mac (switch that off in Settings). Only what happened in the last two minutes notifies, so opening the app, or a synced board catching up, doesn't replay old news.
-- **TestFlight and the App Store.** With an App Store Connect API key, each app's card shows its latest build and App Store version: "1.0 · In testing", "1.0 · Waiting for review", "1.1 · On the App Store". Its project page lists recent builds for each platform. A build that fails processing or a rejected version turns the card Blocked, and a version going live counts as Shipped. See [App Store Connect](#app-store-connect).
+- **TestFlight and the App Store.** With an App Store Connect API key, each app's card shows its latest build and App Store version: "1.0 · In testing", "1.0 · Waiting for review", "1.1 · On the App Store". Its project page lists recent builds for each platform, and what testers sent: crashes and screenshots, each opening its crash log or screenshots. A crash since the newest build shows on the card as "1 crash". A build that fails processing or a rejected version turns the card Blocked, and a version going live counts as Shipped. See [App Store Connect](#app-store-connect).
 - **On your iPhone.** The Factory app shows the board, with widgets for the Home Screen and Lock Screen, and alerts you when something needs you while you're away from your Macs. See [iPhone](#iphone).
 - **Menu bar and Dock.** A raised hand and a count in the menu bar when something needs you; a bolt while work is under way. The Dock icon shows how many projects need you.
 - **One board on all your Macs.** Run Software Factory on each Mac and turn on Settings › Sync. Each board shares its projects through iCloud Drive and shows the others' with its own, labeled with each Mac's name.
@@ -233,9 +234,10 @@ How it works:
 
 Settings › App Store Connect takes an App Store Connect API key: its key ID, issuer ID and `.p8` file. **Fill In from ~/.zshrc** copies them from `export ASC_KEY_ID=…`, `ASC_ISSUER_ID` and `ASC_KEY_PATH` lines, the ones upload scripts use. The key file stays where it is; only its path is kept.
 
-- **Matching.** Apps are matched to projects by bundle ID, which the board reads from the project's `project.yml` or Xcode project: of the IDs there, the shortest that isn't a test target's.
-- **Checking.** Every ten minutes, and every two while a build is processing. It reads each app's latest builds (two per platform), their TestFlight state, and each platform's newest App Store version, plus the one on the App Store if that's older. It only reads.
+- **Matching.** Apps are matched to projects by bundle ID, which the board reads from the project's `project.yml` or Xcode project: of the IDs there that aren't a test target's, the shortest that App Store Connect knows. A project whose Mac app isn't in App Store Connect still finds its iPhone app (`….ios`).
+- **Checking.** Every ten minutes, and every two while a build is processing. It reads each app's latest builds (two per platform), their TestFlight state, and each platform's newest App Store version, plus the one on the App Store if that's older. It also reads TestFlight feedback from the last 30 days: up to ten crashes and ten screenshots. It only reads.
 - **What it reports.** The first check only learns what's there. After that, a build ready to test goes in the timeline and notifies; a build needing export compliance goes in the timeline; a failed build or a rejection is a Blocked report; a version on the App Store is a Shipped report. A build or version on iOS and Mac at once is one piece of news.
+- **Feedback.** A crash or screenshot a tester sends goes in the timeline (a crash in ember), notifies on the Mac, and alerts the iPhone while you're away from your Macs. Clicking one on the project page fetches its crash log, which you can copy or open in Console, or its screenshots. Crash logs are kept in `Crash Logs/` beside the board once fetched, and `GET /api/projects/{id}/crashes/{feedback}` returns one, so a Claude Code session can read it: the ids are under `appStore.feedback` in `GET /api/projects/{id}`.
 - **Other Macs.** Only one Mac needs the key: the status syncs with the rest of the board.
 
 ## Passport
@@ -280,7 +282,7 @@ The iPhone app, Factory, shows the board your Macs keep, Today, and the Passport
 - **Passport.** This week, last week or the last 30 days, as on the Mac: the hours, sessions, commits, builds, releases and tokens, each day's hours, the projects and the stamps. A Mac adds up every Mac's numbers (with Sync on) and sends them with the board when they change. Tap a project or a stamp to open its project.
 - **Widgets.** *Board* (small, medium, large): what needs you, what's working and the latest of the rest. *Needs You* (Lock Screen): how many projects need you, and which. Tap a project to open it.
 - **The morning digest.** If nobody has used any of your Macs by three hours after its time (noon, for 9:00), it goes to the iPhone as an alert instead, and opens Today. Today on the Mac then says so.
-- **Alerts.** When something has needed you for two minutes (a question, your call, a block) and nobody has used any of your Macs for five, the iPhone gets a notification with Claude's message. A permission prompt the board can answer comes at once, with **Allow** and **Deny** on the alert itself. Each Mac shares when you last used it in `iCloud Drive/Software Factory/Presence/`. Settings › iPhone turns alerts off.
+- **Alerts.** When something has needed you for two minutes (a question, your call, a block) and nobody has used any of your Macs for five, the iPhone gets a notification with Claude's message. A permission prompt the board can answer comes at once, with **Allow** and **Deny** on the alert itself, and so does a TestFlight crash or screenshot the board has just learned of. Each Mac shares when you last used it in `iCloud Drive/Software Factory/Presence/`. Settings › iPhone turns alerts off.
 - **How the board gets there.** Each Mac with Settings › iPhone on saves every project, a few seconds after it changes, to your private CloudKit database (container `iCloud.com.darrell.softwarefactory`, zone `Board`), without folder paths and with its latest 25 events, and today's digest and the Passport beside them. The Passport's record is a Project record named `factory.passport`, so the schema needs nothing new, and iPhone builds from before it, which find no project's id or name in it, pass over it. What you change on the iPhone goes to the `Inbox` zone; a Mac folds each change into the board (the later change to a to-do wins, as between Macs) and deletes it. Alerts are records too, which a subscription shows on the iPhone as notifications. The Mac makes that subscription when it's missing: iCloud has refused the iPhone's own save of it while taking the Mac's, and a subscription belongs to the iCloud account, not the device that made it. If the iPhone can't set up alerts, its board says why. Only a copy signed with the team can do this: `scripts/install.sh` signs with it when Xcode can, and otherwise signs locally, without iCloud.
 - **Two environments.** Debug builds use the container's development environment and Release builds (installed, TestFlight) production, so testing never touches the real board.
 
@@ -338,6 +340,7 @@ The API listens on `127.0.0.1:7720`, and only on this Mac unless Other Macs is o
 | POST | `/api/projects/{id}/todos` | Adds one: `{"text": "…"}` |
 | PATCH | `/api/projects/{id}/todos/{todo}` | Ticks or rewords one: `{"done": true}`, `{"text": "…"}`. `{todo}` is its `id`, or its number in the open list |
 | DELETE | `/api/projects/{id}/todos/{todo}` | Deletes one |
+| GET | `/api/projects/{id}/crashes/{feedback}` | A TestFlight crash's log, as text. The ids are under `appStore.feedback` in the project |
 | POST | `/api/todos` | Adds one to the project a folder belongs to: `{"path": "…", "text": "…"}` (or `"project"`) |
 | POST | `/api/hooks/claude` | A Claude Code hook's input, unchanged. For a `PermissionRequest` it can answer, the board holds the request until it does and responds with Claude Code's decision (or nothing) |
 | POST | `/api/permissions/{id}` | Answers a permission prompt: `{"allow": true}` or `{"allow": false}`. Says whether a hook was waiting: `{"answered": true}` |
@@ -390,7 +393,7 @@ The reply is the project as the board shows it: `state` and `label` ("Needs you"
 
 ## Data
 
-The board lives in `~/Library/Application Support/Software Factory/projects.json`, the Passport's record in `passport.json`, saved prompts in `prompts.json` the digest's last send and snoozes in `digest.json` and the alerts sent to the iPhone in `phone.json` beside it. Each project keeps its last 200 events and up to 12 sessions. Sessions nobody has heard from in three days are dropped.
+The board lives in `~/Library/Application Support/Software Factory/projects.json`, the Passport's record in `passport.json`, saved prompts in `prompts.json` the digest's last send and snoozes in `digest.json` and the alerts sent to the iPhone in `phone.json` beside it. TestFlight crash logs, once fetched, are in `Crash Logs/`. Each project keeps its last 200 events and up to 12 sessions. Sessions nobody has heard from in three days are dropped.
 
 ## Development
 

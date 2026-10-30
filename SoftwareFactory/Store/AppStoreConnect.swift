@@ -13,11 +13,13 @@ nonisolated enum AppStoreConnect {
     }
 
     enum Failure: LocalizedError {
+        case noKey
         case badKey(String)
         case http(Int, String)
 
         var errorDescription: String? {
             switch self {
+            case .noKey: String(localized: "Add your App Store Connect key in Settings › App Store Connect.")
             case .badKey(let reason): String(localized: "Couldn't use the key: \(reason)")
             case .http(401, _): String(localized: "App Store Connect didn't accept the key. Check the key ID and issuer ID.")
             case .http(let code, let message): String(localized: "App Store Connect answered \(code): \(message)")
@@ -38,11 +40,64 @@ nonisolated enum AppStoreConnect {
                   let bundleID = attributes["bundleId"] as? String else { continue }
             async let builds = builds(of: appID, token: token, now: now)
             async let versions = versions(of: appID, token: token)
+            // Feedback is extra: without it (a key that can't read it), the rest still counts.
+            async let feedback = try? feedback(of: appID, token: token, now: now)
             let (latest, uploads) = try await builds
             found[bundleID] = AppStoreStatus(appID: appID, name: attributes["name"] as? String ?? bundleID,
-                                             builds: latest, versions: try await versions, checked: now, uploads: uploads)
+                                             builds: latest, versions: try await versions, checked: now, uploads: uploads,
+                                             feedback: await feedback)
         }
         return found
+    }
+
+    /// A crash's log, as the tester's device wrote it.
+    static func crashLog(_ id: String, credentials: Credentials, now: Date = .now) async throws -> String {
+        let response = try await get("/v1/betaFeedbackCrashSubmissions/\(id)/crashLog", token: token(credentials, now: now))
+        return ((response["data"] as? [String: Any])?["attributes"] as? [String: Any])?["logText"] as? String ?? ""
+    }
+
+    /// A screenshot submission's images. Their links only last a while, so they're fetched when you look.
+    static func screenshots(_ id: String, credentials: Credentials, now: Date = .now) async throws -> [URL] {
+        let response = try await get("/v1/betaFeedbackScreenshotSubmissions/\(id)?fields[betaFeedbackScreenshotSubmissions]=screenshots",
+                                     token: token(credentials, now: now))
+        let images = ((response["data"] as? [String: Any])?["attributes"] as? [String: Any])?["screenshots"] as? [[String: Any]] ?? []
+        return images.compactMap { ($0["url"] as? String).flatMap(URL.init(string:)) }
+    }
+
+    /// TestFlight feedback from the last 30 days, newest first: up to ten crashes and ten screenshots.
+    private static func feedback(of appID: String, token: String, now: Date) async throws -> [StoreFeedback] {
+        func list(_ type: String, _ fields: String) -> String {
+            "/v1/apps/\(appID)/\(type)?sort=-createdDate&limit=10&include=build&fields[builds]=version"
+                + "&fields[\(type)]=createdDate,comment,deviceModel,osVersion,appPlatform,devicePlatform,build\(fields)"
+        }
+        async let crashes = get(list("betaFeedbackCrashSubmissions", ""), token: token)
+        async let screenshots = get(list("betaFeedbackScreenshotSubmissions", ",screenshots"), token: token)
+        return feedback(crashes: try await crashes, screenshots: try await screenshots, now: now)
+    }
+
+    /// Reads the two lists App Store Connect answers with: each item's build number comes from the
+    /// builds it includes.
+    static func feedback(crashes: [String: Any], screenshots: [String: Any], now: Date) -> [StoreFeedback] {
+        func read(_ response: [String: Any], as kind: StoreFeedback.Kind) -> [StoreFeedback] {
+            var numbers: [String: String] = [:]
+            for item in response["included"] as? [[String: Any]] ?? [] where item["type"] as? String == "builds" {
+                if let id = item["id"] as? String { numbers[id] = (item["attributes"] as? [String: Any])?["version"] as? String }
+            }
+            return (response["data"] as? [[String: Any]] ?? []).compactMap { item in
+                guard let id = item["id"] as? String, let a = item["attributes"] as? [String: Any],
+                      let created = date(a["createdDate"]), now.timeIntervalSince(created) < 30 * 86_400 else { return nil }
+                let build = (((item["relationships"] as? [String: Any])?["build"] as? [String: Any])?["data"] as? [String: Any])?["id"] as? String
+                // The device's system, which for an iPhone app on a Mac is macOS.
+                let platform = (a["devicePlatform"] as? String ?? a["appPlatform"] as? String).map { $0 == "MAC_OS" ? "macOS" : StoreText.platform($0) }
+                let system = (a["osVersion"] as? String).map { [platform, $0].compactMap { $0 }.joined(separator: " ") }
+                let comment = (a["comment"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+                return StoreFeedback(id: id, kind: kind, created: created, build: build.flatMap { numbers[$0] },
+                                     device: a["deviceModel"] as? String, system: system,
+                                     comment: comment?.isEmpty == false ? comment : nil,
+                                     screenshots: kind == .screenshot ? (a["screenshots"] as? [Any])?.count : nil)
+            }
+        }
+        return (read(crashes, as: .crash) + read(screenshots, as: .screenshot)).sorted { $0.created > $1.created }
     }
 
     /// The latest builds, newest first: up to two per platform. And every upload in the last 90 days.
@@ -148,8 +203,9 @@ nonisolated enum AppStoreConnect {
 }
 
 /// Checks App Store Connect for every project with an app: every ten minutes, every two while a
-/// build is processing. What changed goes on the board: a build ready to test in the timeline (and a
-/// notification), a failed build or a rejection as Blocked, an app going live as Shipped.
+/// build is processing. What changed goes on the board: a build ready to test, or a tester's crash or
+/// screenshot, in the timeline (and a notification), a failed build or a rejection as Blocked, an app
+/// going live as Shipped.
 @MainActor
 @Observable
 final class AppStoreWatcher {
@@ -211,16 +267,16 @@ final class AppStoreWatcher {
         guard let credentials, !isChecking else { return false }
         let store = ProjectStore.shared
         // A bundle ID can belong to a project on this Mac or another's: the status syncs either way.
-        let projects = store.projects.values.filter { !$0.hidden && $0.bundleID != nil }
+        let projects = store.projects.values.filter { !$0.hidden && !$0.appBundleIDs.isEmpty }
         guard !projects.isEmpty else { return false }
         isChecking = true
         defer { isChecking = false }
         do {
-            let found = try await AppStoreConnect.status(for: projects.compactMap(\.bundleID), credentials: credentials)
+            let found = try await AppStoreConnect.status(for: Set(projects.flatMap(\.appBundleIDs)).sorted(), credentials: credentials)
             problem = nil
             lastCheck = .now
             for project in projects {
-                guard let bundleID = project.bundleID, let status = found[bundleID] else { continue }
+                guard let status = Self.status(for: project, in: found) else { continue }
                 record(status, for: project.id)
             }
         } catch {
@@ -229,12 +285,33 @@ final class AppStoreWatcher {
         return true
     }
 
+    /// A project's app in App Store Connect: the first of its bundle IDs that App Store Connect knows,
+    /// shortest first. A Mac app's may not be there when its iPhone app's is.
+    static func status(for project: Project, in found: [String: AppStoreStatus]) -> AppStoreStatus? {
+        project.appBundleIDs.lazy.compactMap { found[$0] }.first
+    }
+
+    /// A crash's log, kept in the board's folder once fetched (Crash Logs/<id>.crash), which Console opens.
+    func crashLog(_ id: String) async throws -> URL {
+        let folder = ProjectStore.shared.dataDirectory.appending(path: "Crash Logs")
+        let file = folder.appending(path: id.filter { $0.isLetter || $0.isNumber || $0 == "-" } + ".crash")
+        if FileManager.default.fileExists(atPath: file.path) { return file }
+        guard let credentials else { throw AppStoreConnect.Failure.noKey }
+        let text = try await AppStoreConnect.crashLog(id, credentials: credentials)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try text.write(to: file, atomically: true, encoding: .utf8)
+        return file
+    }
+
+    func screenshots(_ id: String) async throws -> [URL] {
+        guard let credentials else { throw AppStoreConnect.Failure.noKey }
+        return try await AppStoreConnect.screenshots(id, credentials: credentials)
+    }
+
     /// Compares with what was there before and puts the changes on the board. A build or version
-    /// on iOS and Mac at once is one piece of news.
-    private func record(_ fresh: AppStoreStatus, for id: String) {
-        let store = ProjectStore.shared
+    /// on iOS and Mac at once is one piece of news; so is each tester's crash or screenshot.
+    func record(_ fresh: AppStoreStatus, for id: String, in store: ProjectStore = .shared, now: Date = .now) {
         let before = store[id]?.appStore
-        let now = Date.now
         var status = fresh
         var ready: [StoreBuild] = []
         var failed: [StoreBuild] = []
@@ -268,6 +345,20 @@ final class AppStoreWatcher {
             default: moved.append(version)
             }
         }
+        // Feedback that came in since the last check is news. On the first check, what's there is only
+        // learned; when App Store Connect couldn't say, what was known stands.
+        if status.feedback == nil { status.feedback = before?.feedback }
+        let known = before?.feedback.map { Dictionary($0.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first }) }
+        var feedback: [StoreFeedback] = []
+        for index in (status.feedback ?? []).indices {
+            let item = status.feedback![index]
+            if let earlier = known?[item.id] {
+                status.feedback![index].seen = earlier.seen
+            } else if known != nil, now.timeIntervalSince(item.created) < 86_400 {
+                status.feedback![index].seen = now
+                feedback.append(status.feedback![index])
+            }
+        }
 
         func byNumber(_ builds: [StoreBuild]) -> [(String, [StoreBuild])] {
             Dictionary(grouping: builds, by: \.number).sorted { $0.key < $1.key }
@@ -287,6 +378,11 @@ final class AppStoreWatcher {
                                 title: String(localized: "\(StoreText.versions(versions)): \(versions[0].label)"),
                                 detail: String(localized: "App Store")))
         }
+        // Oldest first, so the newest ends up on top.
+        for item in feedback.reversed() {
+            events.append(Event(date: now, state: item.kind == .crash ? .blocked : nil, symbol: item.symbol,
+                                title: item.title, detail: item.detail, ref: "feedback:\(item.id)"))
+        }
         for (number, builds) in byNumber(failed) {
             reports.append(Report(state: "blocked", note: String(localized: "Build \(number) failed processing (\(StoreText.builds(builds)))")))
         }
@@ -299,7 +395,9 @@ final class AppStoreWatcher {
 
         store.update(id) { p in
             p.appStore = status
-            for event in events { p.log(event) }
+            // Another Mac may have logged the same feedback already.
+            let logged = Set(p.events.compactMap(\.ref))
+            for event in events where !(event.ref.map(logged.contains) ?? false) { p.log(event) }
             if !events.isEmpty { p.lastActivity = max(p.lastActivity, now) }
         }
         for report in reports { _ = try? store.apply(report, to: id) }

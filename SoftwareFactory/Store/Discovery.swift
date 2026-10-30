@@ -14,7 +14,8 @@ nonisolated enum Discovery {
         var commits: [Commit]
         /// The project's own folder and each of its worktrees.
         var looseEnds: [LooseEnds]
-        var bundleID: String?
+        /// Its apps' bundle IDs, shortest first.
+        var bundleIDs: [String] = []
     }
 
     static func scan() async -> [Found] {
@@ -74,12 +75,13 @@ nonisolated enum Discovery {
         let (branch, commits) = gitHistory(in: root)
         return Found(root: root, lastActivity: lastActivity, kind: kind(of: root, readme: readme), readme: readme,
                      branch: branch, repo: remote(in: root), commits: commits, looseEnds: checkouts(in: root),
-                     bundleID: bundleID(in: root))
+                     bundleIDs: bundleIDs(in: root))
     }
 
-    /// The app's bundle ID: of those the XcodeGen spec or Xcode project declares, the shortest that
-    /// isn't a test target's. Extensions add to the app's ("….widgets"), so the app's is shortest.
-    private static func bundleID(in root: String) -> String? {
+    /// The bundle IDs the XcodeGen spec or Xcode project declares, but test targets', shortest first.
+    /// Extensions add to the app's ("….widgets"), so the app's comes first; App Store Connect knows
+    /// which of the rest is an app (an iPhone app's "….ios" beside its Mac app).
+    static func bundleIDs(in root: String) -> [String] {
         let fm = FileManager.default
         var sources = [root + "/project.yml"]
         if let entries = try? fm.contentsOfDirectory(atPath: root) {
@@ -94,7 +96,7 @@ nonisolated enum Discovery {
         }
         return found
             .filter { !$0.localizedCaseInsensitiveContains("test") }
-            .min { $0.count != $1.count ? $0.count < $1.count : $0 < $1 }
+            .sorted { $0.count != $1.count ? $0.count < $1.count : $0 < $1 }
     }
 
     /// The project's own folder and each of its worktrees, with its branch and its uncommitted

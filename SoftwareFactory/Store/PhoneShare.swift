@@ -40,6 +40,9 @@ final class PhoneShare {
     /// How long something waits before the iPhone hears of it, and how long you must have been away.
     nonisolated static let alertDelay: TimeInterval = 120
     nonisolated static let awayAfter: TimeInterval = 300
+    /// TestFlight feedback alerts only as the board learns of it: what came while you were at a Mac
+    /// was shown there.
+    nonisolated static let feedbackAlertWindow: TimeInterval = 900
 
     @ObservationIgnored private var loop: Task<Void, Never>?
     @ObservationIgnored private var pending: Task<Void, Never>?
@@ -245,7 +248,8 @@ final class PhoneShare {
     // MARK: - Alerts
 
     /// Saves an alert for each thing that has needed you for two minutes while you've been away from
-    /// every Mac for five; a permission prompt, at once, which the iPhone can answer from the alert.
+    /// every Mac for five; a permission prompt (which the iPhone can answer from the alert), and a
+    /// tester's crash or screenshot, at once.
     /// Each is named for what it's about, so two Macs saving it make one alert.
     private func sendAlerts() async {
         guard let database else { return }
@@ -379,8 +383,8 @@ final class PhoneShare {
         var project: String
     }
 
-    /// The alerts due now, while you're away, that haven't gone (`sent`): a permission prompt at
-    /// once; anything else that needs you once it has for two minutes.
+    /// The alerts due now, while you're away, that haven't gone (`sent`): a permission prompt, and a
+    /// tester's crash or screenshot, at once; anything else that needs you once it has for two minutes.
     nonisolated static func alertsDue(in projects: [Project], now: Date, sent: Set<String>) -> [Alert] {
         var alerts: [Alert] = []
         for project in projects where !project.hidden {
@@ -396,6 +400,13 @@ final class PhoneShare {
                 let id = "\(session.id).\(session.state.rawValue).\(Int(session.since.timeIntervalSince1970))"
                 guard !sent.contains(id) else { continue }
                 let (title, body) = text(for: session.state, project: project, session: session)
+                alerts.append(Alert(id: id, title: title, body: body, project: project.id))
+            }
+            for item in project.appStore?.feedback ?? [] {
+                guard let learned = item.seen, now.timeIntervalSince(learned) < feedbackAlertWindow else { continue }
+                let id = "feedback.\(item.id)"
+                guard !sent.contains(id) else { continue }
+                let (title, body) = item.alert(in: project.name)
                 alerts.append(Alert(id: id, title: title, body: body, project: project.id))
             }
             if project.reported == .blocked, now.timeIntervalSince(project.reportedAt) >= alertDelay,

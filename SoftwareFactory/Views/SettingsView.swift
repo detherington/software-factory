@@ -196,7 +196,7 @@ private struct AppStoreSection: View {
         } header: {
             Text("App Store Connect")
         } footer: {
-            Text("An App Store Connect API key lets the board show each app's TestFlight builds and App Store versions, and notify when a build is ready to test. It only reads. Apps are matched to projects by bundle ID. One Mac is enough: the status syncs.")
+            Text("An App Store Connect API key lets the board show each app's TestFlight builds, App Store versions and tester feedback, and notify when a build is ready to test or a tester sends a crash or screenshot. It only reads. Apps are matched to projects by bundle ID. One Mac is enough: the status syncs.")
         }
     }
 

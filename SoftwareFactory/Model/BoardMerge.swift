@@ -57,8 +57,14 @@ nonisolated enum BoardMerge {
             merged.repo = merged.repo ?? other.repo
             merged.branch = merged.branch ?? other.branch
             merged.bundleID = merged.bundleID ?? other.bundleID
-            // App Store Connect is the same from any Mac: the latest check wins.
-            if let theirs = other.appStore, theirs.checked > (merged.appStore?.checked ?? .distantPast) { merged.appStore = theirs }
+            merged.bundleIDs = merged.bundleIDs ?? other.bundleIDs
+            // App Store Connect is the same from any Mac: the latest check wins. A Mac that doesn't
+            // read feedback yet leaves what's known of it.
+            if let theirs = other.appStore, theirs.checked > (merged.appStore?.checked ?? .distantPast) {
+                let feedback = merged.appStore?.feedback
+                merged.appStore = theirs
+                if theirs.feedback == nil { merged.appStore?.feedback = feedback }
+            }
             merged.links.merge(other.links) { mine, _ in mine }
 
             // The same session can arrive twice (reported over the network and shared): keep the newer.

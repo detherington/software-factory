@@ -285,6 +285,7 @@ struct FlowLayout: Layout {
 /// "1.0 · In testing" and "1.0 · Waiting for review": where an app's latest build and App Store version stand.
 struct AppStoreChips: View {
     let status: AppStoreStatus
+    var now: Date = .now
 
     var body: some View {
         if let build = status.leadBuild {
@@ -294,6 +295,20 @@ struct AppStoreChips: View {
         if let version = status.leadVersion {
             StatusChip(text: "\(version.version) · \(version.label)", swatch: version.swatch, symbol: "storefront")
                 .help(String(localized: "App Store, \(StoreText.platform(version.platform))"))
+        }
+        // What testers sent since the newest build.
+        let feedback = status.openFeedback(at: now)
+        let crashes = feedback.filter { $0.kind == .crash }.count
+        if crashes > 0 {
+            StatusChip(text: crashes == 1 ? String(localized: "1 crash") : String(localized: "\(crashes) crashes"),
+                       swatch: .ember, symbol: "exclamationmark.triangle.fill")
+                .help(String(localized: "TestFlight crash reports since the newest build"))
+        }
+        if feedback.count > crashes {
+            let notes = feedback.count - crashes
+            StatusChip(text: notes == 1 ? String(localized: "1 screenshot") : String(localized: "\(notes) screenshots"),
+                       symbol: "text.bubble.fill")
+                .help(String(localized: "TestFlight feedback since the newest build"))
         }
     }
 }

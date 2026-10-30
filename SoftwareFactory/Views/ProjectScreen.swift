@@ -388,6 +388,7 @@ private struct WorktreesCard: View {
 private struct AppStoreCard: View {
     let status: AppStoreStatus
     let now: Date
+    @State private var opened: StoreFeedback?
 
     var body: some View {
         Card(padding: 20) {
@@ -410,6 +411,14 @@ private struct AppStoreCard: View {
                         detail: Formats.ago(build.uploaded, from: now), chip: build.label, swatch: build.swatch)
                 }
             }
+            if let feedback = status.feedback, !feedback.isEmpty {
+                TrackedLabel(String(localized: "Feedback"), size: 10, color: Switchyard.textTertiary).padding(.top, 6)
+                ForEach(feedback.prefix(6)) { item in
+                    Button { opened = item } label: { feedbackRow(item) }
+                        .buttonStyle(.plain)
+                        .help(item.kind == .crash ? String(localized: "Show the crash log") : String(localized: "Show the screenshots"))
+                }
+            }
             Button(String(localized: "Open in App Store Connect")) {
                 Reveal.url("https://appstoreconnect.apple.com/apps/\(status.appID)/testflight")
             }
@@ -418,6 +427,33 @@ private struct AppStoreCard: View {
             .foregroundStyle(Switchyard.accent)
             .padding(.top, 4)
         }
+        .sheet(item: $opened) { FeedbackSheet(feedback: $0, appID: status.appID) }
+    }
+
+    /// A crash or screenshot: its build and comment, how long ago, and what it is.
+    private func feedbackRow(_ item: StoreFeedback) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Image(systemName: item.symbol)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(item.swatch?.color ?? Switchyard.textTertiary)
+                .frame(width: 16)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.build ?? item.label)
+                    .font(.code(12))
+                    .foregroundStyle(Switchyard.textSecondary)
+                    .lineLimit(1)
+                if let comment = item.comment {
+                    Text(comment)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Switchyard.textTertiary)
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 8)
+            Text(Formats.ago(item.created, from: now)).font(.display(15, weight: .bold)).foregroundStyle(Switchyard.textTertiary)
+            StatusChip(text: item.label, swatch: item.swatch)
+        }
+        .contentShape(.rect)
     }
 
     private func row(symbol: String, title: String, detail: String?, chip: String, swatch: Swatch?) -> some View {

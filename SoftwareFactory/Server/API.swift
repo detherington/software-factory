@@ -118,6 +118,22 @@ enum API {
                 guard let todo = findTodo(todoKey, in: project) else { throw ReportError.notFound(todoKey) }
                 store.deleteTodo(todo.id, in: project.id)
                 return try encode(TodoList(project: project.id, name: project.name, open: store[project.id]?.openTodos ?? [], done: store[project.id]?.doneTodos ?? []))
+            case ("GET", "api/projects/*/crashes/*"):
+                // A tester's TestFlight crash log, from App Store Connect, kept once fetched.
+                guard let project = store.find(key) else { throw ReportError.notFound(key) }
+                guard project.appStore?.feedback?.contains(where: { $0.id == todoKey && $0.kind == .crash }) == true else {
+                    return .error(404, "\(project.name) has no TestFlight crash \(todoKey). GET /api/projects/\(project.id) lists them under appStore.feedback.")
+                }
+                var response = HTTPResponse.text("")
+                response.later = {
+                    do {
+                        let file = try await AppStoreWatcher.shared.crashLog(todoKey)
+                        return .text(try String(contentsOf: file, encoding: .utf8))
+                    } catch {
+                        return .error(502, error.localizedDescription)
+                    }
+                }
+                return response
             case ("POST", "api/hooks/claude"):
                 guard let payload = try JSONSerialization.jsonObject(with: request.body) as? [String: Any] else {
                     return .error(400, "Send the hook's JSON input as the body.")

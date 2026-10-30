@@ -14,7 +14,7 @@ final class Notifier {
     static let shared = Notifier()
 
     enum Kind: String, CaseIterable, Identifiable {
-        case needsYou, yourCall, blocked, backgroundDone, shipped, buildReady, finished
+        case needsYou, yourCall, blocked, backgroundDone, shipped, buildReady, feedback, finished
 
         var id: Self { self }
 
@@ -26,6 +26,7 @@ final class Notifier {
             case .backgroundDone: String(localized: "Background work finished")
             case .shipped: String(localized: "Shipped")
             case .buildReady: String(localized: "TestFlight build ready")
+            case .feedback: String(localized: "TestFlight crash or feedback")
             case .finished: String(localized: "Turn finished, no question")
             }
         }
@@ -205,6 +206,18 @@ final class Notifier {
             }
             for build in ready { seen.insert("\(project.id)|build|\(build.id)") }
 
+            // A tester's crash or screenshot, as this board or another Mac's learns of it.
+            for item in project.appStore?.feedback ?? [] {
+                guard let learned = item.seen else { continue }
+                let key = "\(project.id)|feedback|\(item.id)"
+                if !seen.contains(key), fresh(learned), isEnabled(.feedback) {
+                    var notice = notice(.feedback, key: key, project: project, session: nil, place: nil)
+                    (notice.title, notice.body) = item.alert(in: project.name)
+                    notices.append((notice, false, false))
+                }
+                seen.insert(key)
+            }
+
             // A release, or a block reported for the project.
             if project.reported == .done || project.reported == .blocked {
                 let kind: Kind = project.reported == .done ? .shipped : .blocked
@@ -285,6 +298,7 @@ final class Notifier {
         case .backgroundDone: (String(localized: "\(name): background work finished"), "")
         case .shipped: (String(localized: "\(name) shipped"), project.note ?? project.task ?? "")
         case .buildReady: (String(localized: "\(name): a TestFlight build is ready"), "")
+        case .feedback: (String(localized: "\(name): TestFlight feedback"), "")
         case .finished: (String(localized: "\(name) finished a turn"), session?.task ?? "")
         }
         return Notice(key: key, kind: kind.rawValue, title: title, subtitle: place, body: body, project: project.id, session: session?.id)

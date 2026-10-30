@@ -35,7 +35,7 @@ struct ProjectView: View {
                 HStack(spacing: 6) {
                     StateChip(state: state, mode: project.mode(at: now), since: Formats.ago(project.stateSince(at: now), from: now))
                     LooseEndsChips(ends: project.openLooseEnds)
-                    if let status = project.appStore { AppStoreChips(status: status) }
+                    if let status = project.appStore { AppStoreChips(status: status, now: now) }
                     if let version = project.version { CodeChip(text: version, symbol: "tag.fill") }
                 }
             }

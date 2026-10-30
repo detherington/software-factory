@@ -11,9 +11,18 @@ struct AppStoreStatus: Codable, Hashable, Sendable {
     var checked: Date
     /// Every build uploaded in the last three months, for the Passport.
     var uploads: [StoreUpload]?
+    /// What testers sent from TestFlight in the last 30 days, newest first: crashes and screenshots.
+    var feedback: [StoreFeedback]?
 
     /// The build that says most: the newest.
     var leadBuild: StoreBuild? { builds.first }
+
+    /// Feedback sent since the newest build was uploaded, in the last week: what the chips count.
+    /// Crashes on builds you've replaced since have likely been dealt with.
+    func openFeedback(at now: Date) -> [StoreFeedback] {
+        let since = max(leadBuild?.uploaded ?? .distantPast, now.addingTimeInterval(-7 * 86_400))
+        return (feedback ?? []).filter { $0.created > since }
+    }
 
     /// The version that says most: one on its way (in review, approved, rejected), else the one on
     /// the App Store, else the one being prepared.
@@ -77,6 +86,62 @@ struct StoreBuild: Codable, Hashable, Sendable, Identifiable {
         case .needsCompliance: .amber
         case .expired, .other: nil
         }
+    }
+}
+
+/// A tester's TestFlight feedback: a crash they sent, or screenshots with a comment. The crash log
+/// and the screenshots stay in App Store Connect, fetched when you open one.
+struct StoreFeedback: Codable, Hashable, Sendable, Identifiable {
+    enum Kind: String, Codable, Sendable { case crash, screenshot }
+
+    var id: String
+    var kind: Kind
+    var created: Date
+    /// The build number it was sent from: "20261030.489".
+    var build: String?
+    /// The device as App Store Connect names it: "iPhone19_4".
+    var device: String?
+    /// "iOS 27.2".
+    var system: String?
+    var comment: String?
+    var screenshots: Int?
+    /// When this board first saw it; nil for what was already there when it first looked.
+    var seen: Date?
+
+    /// "Crash on build 20261030.489", "Feedback on build 16".
+    var title: String {
+        switch (kind, build) {
+        case (.crash, let build?): String(localized: "Crash on build \(build)")
+        case (.crash, nil): String(localized: "Crash")
+        case (.screenshot, let build?): String(localized: "Feedback on build \(build)")
+        case (.screenshot, nil): String(localized: "Feedback")
+        }
+    }
+
+    /// "iPhone19,4 · iOS 27.2".
+    var place: String? {
+        let parts = [device?.replacingOccurrences(of: "_", with: ","), system].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// "iPhone19,4 · iOS 27.2 · “Crashed”".
+    var detail: String {
+        [place, comment.map { "“\($0)”" }].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    var label: String { kind == .crash ? String(localized: "Crash") : String(localized: "Screenshot") }
+    var symbol: String { kind == .crash ? "exclamationmark.triangle.fill" : "text.bubble.fill" }
+    var swatch: Swatch? { kind == .crash ? .ember : nil }
+
+    /// Its notification, on the Mac and the iPhone: the comment first, then where it came from.
+    func alert(in project: String) -> (title: String, body: String) {
+        let title = switch (kind, build) {
+        case (.crash, let build?): String(localized: "\(project) crashed on build \(build)")
+        case (.crash, nil): String(localized: "\(project) crashed")
+        case (.screenshot, let build?): String(localized: "\(project): feedback on build \(build)")
+        case (.screenshot, nil): String(localized: "\(project): TestFlight feedback")
+        }
+        return (title, [comment.map { "“\($0)”" }, place].compactMap { $0 }.joined(separator: "\n"))
     }
 }
 
