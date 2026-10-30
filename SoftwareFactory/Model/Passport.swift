@@ -248,3 +248,41 @@ struct PassportSummary: Codable, Sendable {
                                releases: periodReleases, rows: sorted, stamps: stamps, previousSeconds: previousSeconds)
     }
 }
+
+// MARK: - Saying it
+
+extension PassportSummary {
+    /// "Oct 25 – 31".
+    var range: String {
+        guard let first = days.first?.date, let last = days.last?.date else { return "" }
+        let style = Date.FormatStyle().month(.abbreviated).day()
+        return "\(first.formatted(style)) – \(last.formatted(style))"
+    }
+
+    /// "31 hours of Claude's work across 9 projects. Last week came to 45."
+    func sentence(for period: PassportPeriod) -> String {
+        let projects = rows.filter { !$0.id.isEmpty && $0.usage.seconds >= 60 }.count
+        let hours = Formats.hours(total.seconds)
+        guard total.seconds >= 60 else {
+            switch period {
+            case .thisWeek:
+                guard let previousSeconds else { return String(localized: "No Claude Code work yet this week.") }
+                return String(localized: "No Claude Code work yet this week. Last week came to \(Formats.hours(previousSeconds)) hours.")
+            case .lastWeek: return String(localized: "No Claude Code work last week.")
+            case .month: return String(localized: "No Claude Code work in the last 30 days.")
+            }
+        }
+        let work = projects == 1
+            ? String(localized: "\(hours) hours of Claude's work, on one project.")
+            : String(localized: "\(hours) hours of Claude's work across \(projects) projects.")
+        // Nothing to compare with when the transcripts from before were gone before the board read them.
+        guard let previousSeconds else { return work }
+        if period == .thisWeek { return work + " " + String(localized: "Last week came to \(Formats.hours(previousSeconds)).") }
+        let difference = Formats.hours(abs(total.seconds - previousSeconds))
+        let before = period == .lastWeek ? String(localized: "the week before") : String(localized: "the 30 days before")
+        if difference == "0" { return work + " " + String(localized: "The same as \(before).") }
+        return work + " " + (total.seconds > previousSeconds
+            ? String(localized: "\(difference) more than \(before).")
+            : String(localized: "\(difference) fewer than \(before)."))
+    }
+}

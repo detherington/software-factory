@@ -15,6 +15,8 @@ final class PhoneBoard {
     private(set) var projects: [Project] = []
     /// Today's digest, as a Mac made it.
     private(set) var digest: Digest?
+    /// The Passport's numbers, as a Mac added them up.
+    private(set) var passport: CloudBoard.Passport?
     private(set) var fetched: Date?
     private(set) var problem: String?
     private(set) var isRefreshing = false
@@ -44,6 +46,9 @@ final class PhoneBoard {
             digest = UserDefaults.standard.string(forKey: "FactorySampleDigest")
                 .flatMap { try? Data(contentsOf: URL(fileURLWithPath: $0)) }
                 .flatMap { CloudBoard.decode(Digest.self, from: $0) }
+            passport = UserDefaults.standard.string(forKey: "FactorySamplePassport")
+                .flatMap { try? Data(contentsOf: URL(fileURLWithPath: $0)) }
+                .flatMap { CloudBoard.decode(CloudBoard.Passport.self, from: $0) }
             // `-FactoryOpen <project id | today>`: starts there, as a link would, without iOS asking first.
             opened = UserDefaults.standard.string(forKey: "FactoryOpen")
             #endif
@@ -51,6 +56,7 @@ final class PhoneBoard {
         } else if let cache = BoardCache.read() {
             projects = cache.projects
             digest = cache.digest
+            passport = cache.passport
             fetched = cache.fetched
         }
         clock = Task { [weak self] in
@@ -103,6 +109,7 @@ final class PhoneBoard {
             let board = try await CloudBoard.fetchBoard(from: database)
             projects = board.projects
             digest = board.digest
+            passport = board.passport ?? passport
             fetched = .now
             now = .now
             problem = nil
@@ -190,7 +197,7 @@ final class PhoneBoard {
 
     private func saveCache() {
         guard sample == nil, let fetched else { return }
-        BoardCache.write(BoardCache.Saved(projects: projects, fetched: fetched, digest: digest))
+        BoardCache.write(BoardCache.Saved(projects: projects, fetched: fetched, digest: digest, passport: passport))
         WidgetCenter.shared.reloadAllTimelines()
     }
 
@@ -210,10 +217,10 @@ final class PhoneBoard {
         }
     }
 
-    /// softwarefactory://project/<id>, from a widget, or softwarefactory://today.
+    /// softwarefactory://project/<id>, from a widget, or softwarefactory://today or ://passport.
     func open(_ url: URL) {
         guard url.scheme == "softwarefactory" else { return }
-        if url.host() == "today" { opened = "today" }
+        if url.host() == "today" || url.host() == "passport" { opened = url.host() }
         if url.host() == "project" { opened = url.pathComponents.dropFirst().first }
     }
 

@@ -2,8 +2,8 @@ import CloudKit
 import Foundation
 
 /// The board as the iPhone sees it, in your private iCloud database: each project is a record in the
-/// Board zone, written by the Macs and read by the iPhone app and its widgets, and so is today's
-/// digest. Alerts are records in the default zone, which a subscription on the iPhone turns into
+/// Board zone, written by the Macs and read by the iPhone app and its widgets, and so are today's
+/// digest and the Passport. Alerts are records in the default zone, which a subscription on the iPhone turns into
 /// notifications. What you change on the iPhone (a to-do, a snooze) goes to the Inbox zone, where
 /// the Macs pick it up, fold it into the board and delete it.
 ///
@@ -30,6 +30,9 @@ nonisolated enum CloudBoard {
     static let changeType = "Change"
     /// The digest's one record, replaced as it changes.
     static let digestRecordName = "today"
+    /// The Passport's one record. It's a Project record, so the schema needs no new type: without a
+    /// project's id and name, iPhone builds from before it pass over it. No project id has a dot.
+    static let passportRecordName = "factory.passport"
     /// The subscriptions the iPhone makes: board changes (silent), and alerts (shown).
     static let boardSubscription = "board-changes"
     static let alertSubscription = "alerts"
@@ -81,20 +84,29 @@ nonisolated enum CloudBoard {
         return record
     }
 
-    /// Every project in the zone, and today's digest. There are a few dozen records, so it reads them
-    /// all each time.
-    static func fetchBoard(from database: CKDatabase) async throws -> (projects: [Project], digest: Digest?) {
+    typealias Board = (projects: [Project], digest: Digest?, passport: Passport?)
+
+    /// Every project in the zone, today's digest and the Passport. There are a few dozen records, so
+    /// it reads them all each time.
+    static func fetchBoard(from database: CKDatabase) async throws -> Board {
+        board(from: try await allRecords(in: zoneID, from: database))
+    }
+
+    static func board(from records: [CKRecord]) -> Board {
         var projects: [Project] = []
         var digest: Digest?
-        for record in try await allRecords(in: zoneID, from: database) {
+        var passport: Passport?
+        for record in records {
             guard let data = record[Field.data] as? Data else { continue }
-            if record.recordType == digestType {
+            if record.recordID.recordName == passportRecordName {
+                passport = decode(Passport.self, from: data)
+            } else if record.recordType == digestType {
                 digest = decode(Digest.self, from: data)
             } else if let project = decode(Project.self, from: data) {
                 projects.append(project)
             }
         }
-        return (projects, digest)
+        return (projects, digest, passport)
     }
 
     static func fetchProjects(from database: CKDatabase) async throws -> [Project] {
@@ -118,6 +130,27 @@ nonisolated enum CloudBoard {
 
     static func digestRecord(_ data: Data) -> CKRecord {
         let record = CKRecord(recordType: digestType, recordID: CKRecord.ID(recordName: digestRecordName, zoneID: zoneID))
+        record[Field.data] = data
+        record[Field.updated] = Date.now
+        return record
+    }
+
+    // MARK: - The Passport
+
+    /// The Passport's three periods, as a Mac adds them up: every Mac's numbers, with Sync on.
+    struct Passport: Codable, Sendable {
+        /// By period (`PassportPeriod.rawValue`).
+        var periods: [String: PassportSummary]
+        /// The Macs whose numbers it adds up, the one that sent it first.
+        var macs: [String]
+        /// When that Mac last read its transcripts.
+        var read: Date?
+
+        subscript(period: PassportPeriod) -> PassportSummary? { periods[period.rawValue] }
+    }
+
+    static func passportRecord(_ data: Data) -> CKRecord {
+        let record = CKRecord(recordType: projectType, recordID: CKRecord.ID(recordName: passportRecordName, zoneID: zoneID))
         record[Field.data] = data
         record[Field.updated] = Date.now
         return record

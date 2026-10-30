@@ -28,6 +28,7 @@
 		10792483EAC985226EA29329 /* HTTPServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8EBC3DB50A0488EA40BB9DD /* HTTPServer.swift */; };
 		131BA6DCBB52721C58189E9B /* TodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFBE621D8AA3881DD6578C14 /* TodayView.swift */; };
 		14D4FEF683794F1659359638 /* JSONDates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A37994D244EC3366BA22E8B /* JSONDates.swift */; };
+		15C9D03B5296F94788B000F4 /* PassportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A47C1CE9D995DD6341E664F1 /* PassportTests.swift */; };
 		169D4B3D0F72F8AC3F133612 /* ProjectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2926439496C883742795C774 /* ProjectView.swift */; };
 		1EE73DE78EA241CC0105EFC3 /* PromptsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 561480044E91CB95E9312C16 /* PromptsCard.swift */; };
 		1EFF36E93CFC965F810AA157 /* PhoneShare.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4304961679E593F33E28F272 /* PhoneShare.swift */; };
@@ -90,6 +91,7 @@
 		9514D63FB689FD23E63F7849 /* DigestStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F307B62B1D5237572FA80E0B /* DigestStore.swift */; };
 		9A7E3080A59DA04FAE5E9C6A /* TranscriptTally.swift in Sources */ = {isa = PBXBuildFile; fileRef = 750986EBDE0BCB38AAA4A331 /* TranscriptTally.swift */; };
 		9BE2E298FFCEECE0BDBD311D /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F101127FEA2EA48928C7D6C /* Theme.swift */; };
+		9E5B75E6B0D0611E39439E6B /* PassportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E59C0DAB7101FF68A24D0D3 /* PassportView.swift */; };
 		A44F3E015953AFACE6846423 /* TodayScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = C891FB31198247DFD0150F56 /* TodayScreen.swift */; };
 		A49AFAACB1AC1743C4A9C0F5 /* ProjectScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4F8FB5A083F5B981533DEE7 /* ProjectScreen.swift */; };
 		A4EA8B73F44C82B10D60C0EF /* AnswerLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1592BA23764AC56A44C211C /* AnswerLink.swift */; };
@@ -229,7 +231,9 @@
 		977DD354A7F535B809419220 /* Project.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Project.swift; sourceTree = "<group>"; };
 		99D809233C06A33F0C906EB8 /* SoftwareFactoryPhone.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = SoftwareFactoryPhone.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9C9B5FC8B0D1CFFD06F05FE8 /* WidgetGallery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetGallery.swift; sourceTree = "<group>"; };
+		9E59C0DAB7101FF68A24D0D3 /* PassportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PassportView.swift; sourceTree = "<group>"; };
 		9FB65952C565823C2FCA44E1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A47C1CE9D995DD6341E664F1 /* PassportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PassportTests.swift; sourceTree = "<group>"; };
 		A725CBC37F9F5C022AD6EF80 /* Formats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formats.swift; sourceTree = "<group>"; };
 		ABECEBA318DF256AAAD0079A /* Palette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Palette.swift; sourceTree = "<group>"; };
 		AE55A3E797CBE890A2D2A913 /* PromptStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptStore.swift; sourceTree = "<group>"; };
@@ -422,6 +426,7 @@
 				DBF9194CC8FFD256C16FCD1A /* DesktopChatsTests.swift */,
 				3B7DFCA10249BB6F29669E01 /* DigestTests.swift */,
 				666337D23D83E0EEAD491F47 /* HookStateTests.swift */,
+				A47C1CE9D995DD6341E664F1 /* PassportTests.swift */,
 				E891227F615808B2047D8DA0 /* PhoneChangeTests.swift */,
 				5CD2244F87063825DC24265E /* TestBoard.swift */,
 			);
@@ -461,6 +466,7 @@
 				F1592BA23764AC56A44C211C /* AnswerLink.swift */,
 				B6D61ED0D2E4D0EF1D643D73 /* BoardView.swift */,
 				D3F8F22E70776E26B090BD93 /* Info.plist */,
+				9E59C0DAB7101FF68A24D0D3 /* PassportView.swift */,
 				62FF46A10BBF5E44494FCED1 /* PhoneApp.swift */,
 				60082008722015273078B9DF /* PhoneBoard.swift */,
 				2926439496C883742795C774 /* ProjectView.swift */,
@@ -708,6 +714,7 @@
 				0D13F5230DB5D8D802DB5842 /* Formats.swift in Sources */,
 				38E39B98BA58BCD10DC6E71F /* JSONDates.swift in Sources */,
 				F52116BDFBB4668D8D6C8CB0 /* Passport.swift in Sources */,
+				9E5B75E6B0D0611E39439E6B /* PassportView.swift in Sources */,
 				4079DD5D9321BECEADD8BECD /* PhoneApp.swift in Sources */,
 				599759551A0C137DFE3538F7 /* PhoneBoard.swift in Sources */,
 				0A35E03AABDD24DEA0CE0ACB /* Project.swift in Sources */,
@@ -752,6 +759,7 @@
 				E8B0A080E92C09544AA4D31B /* Passport.swift in Sources */,
 				F7A1714CA64B57C8AC076586 /* PassportScreen.swift in Sources */,
 				0C741870799CF90D51B3D3C8 /* PassportStore.swift in Sources */,
+				15C9D03B5296F94788B000F4 /* PassportTests.swift in Sources */,
 				914B3BE5943A3333999F3B86 /* PhoneChangeTests.swift in Sources */,
 				A6B29EE1ED54ADADC002EC8C /* PhoneShare.swift in Sources */,
 				2426791A309A083C5C096692 /* Project.swift in Sources */,

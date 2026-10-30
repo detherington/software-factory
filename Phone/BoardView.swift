@@ -5,8 +5,9 @@ struct PhoneRoot: View {
     @State private var tab = Tab.board
     @State private var boardPath: [String] = []
     @State private var todayPath: [String] = []
+    @State private var passportPath: [String] = []
 
-    enum Tab { case board, today }
+    enum Tab { case board, today, passport }
 
     var body: some View {
         #if DEBUG
@@ -31,12 +32,20 @@ struct PhoneRoot: View {
                         .navigationDestination(for: String.self) { ProjectView(id: $0) }
                 }
             }
+            SwiftUI.Tab("Passport", systemImage: "book.closed.fill", value: Tab.passport) {
+                NavigationStack(path: $passportPath) {
+                    PassportView()
+                        .navigationDestination(for: String.self) { ProjectView(id: $0) }
+                }
+            }
         }
         // A widget's project, or an alert's; the digest's opens Today.
         .onChange(of: board.opened, initial: true) { _, id in
             guard let id else { return }
             if id == "today" {
                 tab = .today
+            } else if id == "passport" {
+                tab = .passport
             } else {
                 tab = .board
                 boardPath = [id]

@@ -438,3 +438,131 @@ extension Array where Element == GridItem {
     /// Cards: as many columns as fit at 340 points or wider each.
     static let cards = [GridItem(.adaptive(minimum: 340), spacing: 14, alignment: .top)]
 }
+
+// MARK: - Passport
+
+/// The Passport's days: each day's hours as a bar, with marks for builds and releases. `compact`
+/// (the iPhone) labels a month's days every fifth and marks each with a dot. A column never asks for
+/// more room than it's given, so a month fits the narrowest screen.
+struct PassportDays: View {
+    let days: [PassportSummary.Day]
+    let now: Date
+    var compact = false
+
+    var body: some View {
+        let most = max(days.map(\.usage.seconds).max() ?? 0, 3600)
+        let wide = days.count <= 7
+        let today = Calendar.current.startOfDay(for: now)
+        Card(padding: compact ? 16 : 20) {
+            HStack(alignment: .bottom, spacing: wide ? (compact ? 8 : 14) : (compact ? 2 : 4)) {
+                ForEach(Array(days.enumerated()), id: \.element.id) { index, day in
+                    let isToday = day.date == today
+                    VStack(spacing: 6) {
+                        if wide {
+                            Text(day.usage.seconds >= 60 ? Formats.hours(day.usage.seconds) : " ")
+                                .font(.display(compact ? 16 : 20, weight: .bold))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.6)
+                                .foregroundStyle(isToday ? Switchyard.text : Switchyard.textSecondary)
+                        }
+                        bar(day, fraction: day.usage.seconds / most, isToday: isToday)
+                        HStack(spacing: 3) {
+                            if compact && !wide {
+                                // A release, else a build.
+                                if let swatch: Swatch = day.releases > 0 ? .mint : day.builds > 0 ? .sky : nil {
+                                    Circle().fill(swatch.color).frame(width: 4, height: 4)
+                                }
+                            } else {
+                                if day.releases > 0 { mark("checkmark", .mint) }
+                                if day.builds > 0 { mark("paperplane.fill", .sky) }
+                            }
+                        }
+                        .frame(height: 12)
+                        if wide {
+                            TrackedLabel(day.date.formatted(.dateTime.weekday(.abbreviated)), size: 10,
+                                         color: isToday ? Switchyard.text : Switchyard.textTertiary)
+                        }
+                        Text(wide || !compact || index % 5 == 0 ? day.date.formatted(.dateTime.day()) : " ")
+                            .font(.display(wide ? (compact ? 18 : 22) : (compact ? 11 : 14), weight: .heavy))
+                            .lineLimit(1)
+                            .fixedSize()
+                            .foregroundStyle(isToday ? Switchyard.text : Switchyard.textTertiary)
+                    }
+                    .frame(minWidth: 0, maxWidth: .infinity)
+                    .help(tooltip(day))
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(tooltip(day))
+                }
+            }
+        }
+    }
+
+    private func bar(_ day: PassportSummary.Day, fraction: Double, isToday: Bool) -> some View {
+        let height: CGFloat = compact ? 110 : 140
+        return ZStack(alignment: .bottom) {
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .fill(Switchyard.surfaceRaised)
+            if day.usage.seconds > 0 {
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(Swatch.violet.color.opacity(isToday || day.isFuture ? 1 : 0.85))
+                    .frame(height: max(4, height * fraction))
+            }
+        }
+        .frame(height: height)
+        .opacity(day.isFuture ? 0.4 : 1)
+    }
+
+    private func mark(_ symbol: String, _ swatch: Swatch) -> some View {
+        Image(systemName: symbol)
+            .font(.system(size: 9, weight: .black))
+            .foregroundStyle(swatch.color)
+    }
+
+    private func tooltip(_ day: PassportSummary.Day) -> String {
+        var parts = [day.date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()),
+                     String(localized: "\(Formats.hours(day.usage.seconds)) hours")]
+        if day.usage.turns > 0 { parts.append(String(localized: "\(day.usage.turns) turns")) }
+        if day.commits > 0 { parts.append(String(localized: "\(day.commits) commits")) }
+        if day.builds > 0 { parts.append(String(localized: "\(day.builds) builds")) }
+        if day.releases > 0 { parts.append(String(localized: "\(day.releases) shipped")) }
+        return parts.joined(separator: " · ")
+    }
+}
+
+/// A milestone, inked like a passport stamp: a double border in its color, set at a slight angle.
+struct PassportStamp: View {
+    let stamp: PassportSummary.Stamp
+
+    var body: some View {
+        let color = stamp.swatch.color
+        VStack(spacing: 4) {
+            TrackedLabel(stamp.label, size: 10, color: color)
+            Text(stamp.value)
+                .font(.display(40, weight: .black))
+                .foregroundStyle(color)
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+            TrackedLabel(stamp.caption, size: 9, color: color.opacity(0.8))
+                .lineLimit(1)
+        }
+        .padding(.vertical, 16)
+        .padding(.horizontal, 14)
+        .frame(maxWidth: .infinity, minHeight: 124)
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(color.opacity(0.9), lineWidth: 2.5)
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(color.opacity(0.45), lineWidth: 1).padding(6)
+        }
+        .rotationEffect(.degrees(tilt))
+        .contentShape(.rect)
+        .help(stamp.detail ?? "")
+        .accessibilityElement(children: .combine)
+    }
+
+    /// Between -4° and 4°, the same each time for the same stamp.
+    private var tilt: Double {
+        let sum = stamp.id.utf8.reduce(0) { $0 &+ Int($1) }
+        return Double(sum % 9) - 4
+    }
+}

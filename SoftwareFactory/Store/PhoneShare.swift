@@ -50,6 +50,8 @@ final class PhoneShare {
     /// What's in iCloud now, by project: the data last sent. Read from iCloud on the first send.
     @ObservationIgnored private var sent: [String: Data]?
     @ObservationIgnored private var sentDigest: Data?
+    /// The Passport last sent, without when it was read, which changes with every read.
+    @ObservationIgnored private var sentPassport: Data?
     @ObservationIgnored private var state = Saved()
     @ObservationIgnored private var otherMacsInput: Date?
     @ObservationIgnored private var lastPresenceWrite = Date.distantPast
@@ -180,6 +182,7 @@ final class PhoneShare {
             }
             status = .shared(.now, count: payloads.count)
             await sendDigest(to: database)
+            await sendPassport(to: database)
         } catch {
             log.error("Couldn't send the board: \(error.localizedDescription, privacy: .public)")
             status = .failed(Self.describe(error))
@@ -200,13 +203,39 @@ final class PhoneShare {
         }
     }
 
+    /// The Passport's three periods, once this Mac has read its transcripts. It goes again when the
+    /// numbers change, not each time they're read.
+    private func sendPassport(to database: CKDatabase) async {
+        let passport = PassportStore.shared
+        guard passport.lastRead != nil else { return }
+        let now = Date.now
+        var value = CloudBoard.Passport(periods: Dictionary(uniqueKeysWithValues: PassportPeriod.allCases.map { ($0.rawValue, passport.summary($0, now: now)) }),
+                                        macs: [ProjectStore.shared.machineName] + passport.otherMacs)
+        guard let numbers = try? CloudBoard.encode(value), numbers != sentPassport else { return }
+        value.read = passport.lastRead
+        do {
+            _ = try await database.modifyRecords(saving: [CloudBoard.passportRecord(try CloudBoard.encode(value))], deleting: [], savePolicy: .allKeys)
+            sentPassport = numbers
+        } catch {
+            log.error("Couldn't send the Passport: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
     /// What iCloud has now, so a restart doesn't send every project again: the projects (the digest
-    /// is a record of its own, not one to delete).
+    /// and the Passport are records of their own, not ones to delete).
     private func readSent(from database: CKDatabase) async throws -> [String: Data] {
         var found: [String: Data] = [:]
         for record in try await CloudBoard.allRecords(in: CloudBoard.zoneID, from: database) {
             let data = record[CloudBoard.Field.data] as? Data ?? Data()
-            if record.recordType == CloudBoard.digestType { sentDigest = data } else { found[record.recordID.recordName] = data }
+            if record.recordID.recordName == CloudBoard.passportRecordName {
+                var passport = CloudBoard.decode(CloudBoard.Passport.self, from: data)
+                passport?.read = nil
+                sentPassport = passport.flatMap { try? CloudBoard.encode($0) }
+            } else if record.recordType == CloudBoard.digestType {
+                sentDigest = data
+            } else {
+                found[record.recordID.recordName] = data
+            }
         }
         return found
     }
@@ -380,6 +409,10 @@ final class PhoneShare {
             let board = try await CloudBoard.fetchBoard(from: database)
             result["projects"] = "\(board.projects.count)"
             result["digest"] = board.digest.map { "\($0.title) | \($0.waiting.count) waiting, \($0.todos.count) old to-do groups" } ?? "none"
+            result["passport"] = board.passport.map { passport in
+                PassportPeriod.allCases.map { "\($0.rawValue): \(Formats.hours(passport[$0]?.total.seconds ?? 0)) h" }.joined(separator: ", ")
+                    + " | " + passport.macs.joined(separator: ", ")
+            } ?? "none"
         } catch {
             result["read"] = "\(error)"
         }

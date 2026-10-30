@@ -7,6 +7,7 @@ nonisolated enum BoardCache {
         var projects: [Project]
         var fetched: Date
         var digest: Digest?
+        var passport: CloudBoard.Passport?
     }
 
     private static var url: URL? {

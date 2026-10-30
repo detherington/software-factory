@@ -22,13 +22,14 @@ struct PassportScreen: View {
 struct PassportContent: View {
     @Binding var period: PassportPeriod
     @Environment(ProjectStore.self) private var store
+    @Environment(Navigator.self) private var navigator
     @Environment(PassportStore.self) private var passport
 
     var body: some View {
         let now = store.now
         let summary = passport.summary(period, now: now)
         VStack(alignment: .leading, spacing: 14) {
-            ScreenHeader(label: range(summary), title: String(localized: "Passport")) {
+            ScreenHeader(label: summary.range, title: String(localized: "Passport")) {
                 HStack(spacing: 6) {
                     ForEach(PassportPeriod.allCases) { item in
                         FilterChip(title: item.title, isSelected: item == period) { period = item }
@@ -38,13 +39,13 @@ struct PassportContent: View {
             if passport.lastRead == nil, passport.ledger.transcripts.isEmpty {
                 FirstRead(isReading: passport.isReading)
             } else {
-                Text(sentence(summary))
+                Text(summary.sentence(for: period))
                     .font(.headline(22, weight: .semibold))
                     .foregroundStyle(Switchyard.textSecondary)
                 PassportStats(summary: summary)
                     .padding(.bottom, 4)
                 SectionLabel(String(localized: "By day"))
-                DayStrip(days: summary.days, now: now)
+                PassportDays(days: summary.days, now: now)
                 if !summary.rows.isEmpty {
                     SectionLabel(String(localized: "Projects"), trailing: "\(summary.rows.count)")
                     ProjectTable(rows: summary.rows)
@@ -52,47 +53,16 @@ struct PassportContent: View {
                 if !summary.stamps.isEmpty {
                     SectionLabel(String(localized: "Stamps"))
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 168, maximum: 230), spacing: 20)], alignment: .leading, spacing: 20) {
-                        ForEach(summary.stamps) { StampView(stamp: $0) }
+                        ForEach(summary.stamps) { stamp in
+                            PassportStamp(stamp: stamp)
+                                .onTapGesture { if let project = stamp.project, !project.isEmpty { navigator.open(project) } }
+                        }
                     }
                     .padding(.vertical, 6)
                 }
                 footer(now: now)
             }
         }
-    }
-
-    /// "Oct 25 – 31".
-    private func range(_ summary: PassportSummary) -> String {
-        guard let first = summary.days.first?.date, let last = summary.days.last?.date else { return "" }
-        let style = Date.FormatStyle().month(.abbreviated).day()
-        return "\(first.formatted(style)) – \(last.formatted(style))"
-    }
-
-    /// "31 hours of Claude's work across 9 projects. Last week came to 45."
-    private func sentence(_ summary: PassportSummary) -> String {
-        let projects = summary.rows.filter { !$0.id.isEmpty && $0.usage.seconds >= 60 }.count
-        let hours = Formats.hours(summary.total.seconds)
-        guard summary.total.seconds >= 60 else {
-            switch period {
-            case .thisWeek:
-                guard let previous = summary.previousSeconds else { return String(localized: "No Claude Code work yet this week.") }
-                return String(localized: "No Claude Code work yet this week. Last week came to \(Formats.hours(previous)) hours.")
-            case .lastWeek: return String(localized: "No Claude Code work last week.")
-            case .month: return String(localized: "No Claude Code work in the last 30 days.")
-            }
-        }
-        let work = projects == 1
-            ? String(localized: "\(hours) hours of Claude's work, on one project.")
-            : String(localized: "\(hours) hours of Claude's work across \(projects) projects.")
-        // Nothing to compare with when the transcripts from before were gone before the board read them.
-        guard let previous = summary.previousSeconds else { return work }
-        if period == .thisWeek { return work + " " + String(localized: "Last week came to \(Formats.hours(previous)).") }
-        let difference = Formats.hours(abs(summary.total.seconds - previous))
-        let before = period == .lastWeek ? String(localized: "the week before") : String(localized: "the 30 days before")
-        if difference == "0" { return work + " " + String(localized: "The same as \(before).") }
-        return work + " " + (summary.total.seconds > previous
-            ? String(localized: "\(difference) more than \(before).")
-            : String(localized: "\(difference) fewer than \(before)."))
     }
 
     private func footer(now: Date) -> some View {
@@ -157,80 +127,6 @@ struct PassportStats: View {
             TrackedLabel(label, size: 11, color: Switchyard.textTertiary)
         }
         .accessibilityElement(children: .combine)
-    }
-}
-
-/// Each day's hours as a bar, with marks for builds and releases.
-private struct DayStrip: View {
-    let days: [PassportSummary.Day]
-    let now: Date
-
-    var body: some View {
-        let most = max(days.map(\.usage.seconds).max() ?? 0, 3600)
-        let wide = days.count <= 7
-        let today = Calendar.current.startOfDay(for: now)
-        Card(padding: 20) {
-            HStack(alignment: .bottom, spacing: wide ? 14 : 4) {
-                ForEach(days) { day in
-                    let isToday = day.date == today
-                    VStack(spacing: 6) {
-                        if wide {
-                            Text(day.usage.seconds >= 60 ? Formats.hours(day.usage.seconds) : " ")
-                                .font(.display(20, weight: .bold))
-                                .foregroundStyle(isToday ? Switchyard.text : Switchyard.textSecondary)
-                        }
-                        bar(day, fraction: day.usage.seconds / most, isToday: isToday)
-                        HStack(spacing: 3) {
-                            if day.releases > 0 { mark("checkmark", .mint) }
-                            if day.builds > 0 { mark("paperplane.fill", .sky) }
-                        }
-                        .frame(height: 12)
-                        if wide {
-                            TrackedLabel(day.date.formatted(.dateTime.weekday(.abbreviated)), size: 10,
-                                         color: isToday ? Switchyard.text : Switchyard.textTertiary)
-                        }
-                        Text(day.date.formatted(.dateTime.day()))
-                            .font(.display(wide ? 22 : 14, weight: .heavy))
-                            .foregroundStyle(isToday ? Switchyard.text : Switchyard.textTertiary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .help(tooltip(day))
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(tooltip(day))
-                }
-            }
-        }
-    }
-
-    private func bar(_ day: PassportSummary.Day, fraction: Double, isToday: Bool) -> some View {
-        let height: CGFloat = 140
-        return ZStack(alignment: .bottom) {
-            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                .fill(Switchyard.surfaceRaised)
-            if day.usage.seconds > 0 {
-                RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(Swatch.violet.color.opacity(isToday || day.isFuture ? 1 : 0.85))
-                    .frame(height: max(4, height * fraction))
-            }
-        }
-        .frame(height: height)
-        .opacity(day.isFuture ? 0.4 : 1)
-    }
-
-    private func mark(_ symbol: String, _ swatch: Swatch) -> some View {
-        Image(systemName: symbol)
-            .font(.system(size: 9, weight: .black))
-            .foregroundStyle(swatch.color)
-    }
-
-    private func tooltip(_ day: PassportSummary.Day) -> String {
-        var parts = [day.date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()),
-                     String(localized: "\(Formats.hours(day.usage.seconds)) hours")]
-        if day.usage.turns > 0 { parts.append(String(localized: "\(day.usage.turns) turns")) }
-        if day.commits > 0 { parts.append(String(localized: "\(day.commits) commits")) }
-        if day.builds > 0 { parts.append(String(localized: "\(day.builds) builds")) }
-        if day.releases > 0 { parts.append(String(localized: "\(day.releases) shipped")) }
-        return parts.joined(separator: " · ")
     }
 }
 
@@ -306,45 +202,5 @@ struct ProjectTable: View {
             .lineLimit(1)
             .minimumScaleFactor(0.7)
             .frame(width: Self.columnWidth, alignment: .trailing)
-    }
-}
-
-/// A milestone, inked like a passport stamp: a double border in its color, set at a slight angle.
-private struct StampView: View {
-    let stamp: PassportSummary.Stamp
-    @Environment(Navigator.self) private var navigator
-
-    var body: some View {
-        let color = stamp.swatch.color
-        VStack(spacing: 4) {
-            TrackedLabel(stamp.label, size: 10, color: color)
-            Text(stamp.value)
-                .font(.display(40, weight: .black))
-                .foregroundStyle(color)
-                .lineLimit(1)
-                .minimumScaleFactor(0.5)
-            TrackedLabel(stamp.caption, size: 9, color: color.opacity(0.8))
-                .lineLimit(1)
-        }
-        .padding(.vertical, 16)
-        .padding(.horizontal, 14)
-        .frame(maxWidth: .infinity, minHeight: 124)
-        .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(color.opacity(0.9), lineWidth: 2.5)
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(color.opacity(0.45), lineWidth: 1).padding(6)
-        }
-        .rotationEffect(.degrees(tilt))
-        .contentShape(.rect)
-        .onTapGesture { if let project = stamp.project, !project.isEmpty { navigator.open(project) } }
-        .help(stamp.detail ?? "")
-        .accessibilityElement(children: .combine)
-    }
-
-    /// Between -4° and 4°, the same each time for the same stamp.
-    private var tilt: Double {
-        let sum = stamp.id.utf8.reduce(0) { $0 &+ Int($1) }
-        return Double(sum % 9) - 4
     }
 }
