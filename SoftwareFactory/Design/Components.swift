@@ -146,20 +146,24 @@ struct StateChip: View {
     }
 }
 
-/// "± 4 changed", "↑ 1 unpushed on Ratatoskr": work in a project's folder that hasn't gone anywhere.
+/// "± 4 changed", "↑ 1 unpushed in clever-elbakyan on Ratatoskr": work in a project's folder, or one
+/// of its worktrees, that hasn't gone anywhere.
 struct LooseEndsChips: View {
     let ends: [LooseEnds]
+    /// Off where the row around them already says which folder it is.
+    var showsPlace = true
 
     var body: some View {
         ForEach(Array(ends.enumerated()), id: \.offset) { _, end in
-            let place = end.machine.map { String(localized: " on \($0)") } ?? ""
+            let place = showsPlace ? end.place : ""
+            let branch = end.branch.map { String(localized: ", on \($0)") } ?? ""
             if end.changes > 0 {
                 CodeChip(text: String(localized: "\(end.changes) changed\(place)"), symbol: "plusminus")
-                    .help(String(localized: "Files changed or added and not committed"))
+                    .help(String(localized: "Files changed or added and not committed\(branch)"))
             }
             if end.unpushed > 0 {
                 CodeChip(text: String(localized: "\(end.unpushed) unpushed\(place)"), symbol: "arrow.up")
-                    .help(String(localized: "Commits not pushed yet"))
+                    .help(String(localized: "Commits not pushed yet\(branch)"))
             }
         }
     }

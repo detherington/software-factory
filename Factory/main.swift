@@ -325,7 +325,15 @@ func run(_ args: Arguments) async throws {
     case "hook":
         // Never fail or slow a Claude Code session over the board: forward, stay quiet whatever
         // happens, and when the board can't be reached, don't try again for a minute.
-        let input = FileHandle.standardInput.readDataToEndOfFile()
+        var input = FileHandle.standardInput.readDataToEndOfFile()
+        // A board on another Mac can't look at this one's folders: say which repository and
+        // worktree the session is in. The board here looks for itself.
+        if !["127.0.0.1", "localhost", "::1"].contains(url.host() ?? ""),
+           var payload = (try? JSONSerialization.jsonObject(with: input)) as? [String: Any], let cwd = payload["cwd"] as? String {
+            payload["factory_root"] = ProjectPath.root(for: cwd)
+            payload["factory_worktree"] = ProjectPath.worktree(in: cwd)
+            if let data = try? JSONSerialization.data(withJSONObject: payload) { input = data }
+        }
         let offline = URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "software-factory-offline")
         if let since = (try? offline.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate,
            Date.now.timeIntervalSince(since) < 60 {

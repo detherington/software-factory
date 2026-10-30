@@ -3,7 +3,7 @@
 A status board for every coding project on this Mac: what's being worked on, what's waiting on you, what's broken and what shipped. A native macOS app in the family of Rounds, Sojourny and Emanata. It has a local HTTP API that Claude Code sessions (and anything else) report to.
 
 - **The board.** Projects that need you come first, as full-bleed cards in their state's color. Every other project is a card with its three-letter code, like an airport code: TDR, EMN, LTC.
-- **Project pages.** How long it's been working or waiting, the milestone and its steps, live sessions (worktrees included), and a timeline of reports, sessions and commits.
+- **Project pages.** How long it's been working or waiting, the milestone and its steps, live sessions with the worktree and branch each runs in, every worktree's branch and loose ends, and a timeline of reports, sessions and commits.
 - **Open the chat in Claude.** For work done in Claude Desktop, you can jump straight to the chat:
   - **Project page:** a chat button sits beside Finder and Terminal. It opens the live session's chat, or else the project's latest chat.
   - **Sessions:** rows show the chat's title and open it when clicked. A Recent chats card lists the project's other chats.
@@ -109,6 +109,8 @@ Sessions that go quiet stop counting: a working session after 20 minutes, a wait
 
 A path resolves to its project. Worktrees under `.claude/worktrees/` and linked git worktrees fold into their repository. A subfolder folds into the repository around it.
 
+A session in a worktree is named by the worktree's folder, wherever it is: a Claude Code worktree, or one made with `git worktree add` anywhere else. The name follows the session if `EnterWorktree` moves it into one, or `ExitWorktree` back out.
+
 ## Claude Code hooks
 
 `factory install-hooks` (or Settings) adds the hooks below to `~/.claude/settings.json`. It keeps everything else there and backs the file up to `settings.before-software-factory.json` first. Each hook posts its JSON input, unchanged, to `POST /api/hooks/claude`:
@@ -144,7 +146,10 @@ Each ends when its `<task-notification>` arrives with a final status (`completed
 - **Testing, Building, Shipping:** what the Bash command under way is for, from its description or the command itself. Tests, smoke runs and checks count as Testing; builds and archives as Building; TestFlight, deploys and uploads as Shipping.
 - **Compacting:** the conversation is being compacted.
 
-**Loose ends.** Discovery runs `git status --porcelain=v2 --branch` in each project's folder. Uncommitted files and commits not yet pushed show as chips on resting cards and the project page, like "± 4 changed" and "↑ 1 unpushed". On a synced board they're labeled with the Mac: "on Ratatoskr".
+**Loose ends.** Discovery runs `git status --porcelain=v2 --branch` in each project's folder and in each of its worktrees (from `git worktree list`). It passes `--no-optional-locks`, so a session committing there never finds the index locked.
+- **Chips.** Uncommitted files and commits not yet pushed show as chips on resting cards and the project page, like "± 4 changed" and "↑ 1 unpushed". A worktree's say which one: "± 7 changed in android-trial". On a synced board they're labeled with the Mac too: "on Ratatoskr".
+- **Unpushed** means ahead of the branch's upstream. A branch that has never been pushed counts its commits that are on no remote, and, in a worktree, not in the project's own folder either: once merged there, they're the folder's to push. A repository with no remote has nothing unpushed.
+- **Worktrees card.** On the project page, each folder with work left in it or a session running there gets a row: its branch, its loose ends and its sessions, colored by the most urgent of them. The rest are listed by name and branch at the foot.
 
 **Keeping the hooks current.** When a new version listens to more events, the app updates the hooks it installed at launch, keeping the command they run. It backs your settings up first and leaves everything else as it was.
 
@@ -192,6 +197,7 @@ How it works:
 - **The Mac's name.** That Mac's sessions, reports and timeline entries carry its name: its computer name, or `--name "Home Mac"`. Settings lists each Mac and when it last reported.
 - **Matching projects.** A folder at the same path as here joins the same project. One at a different path matches a project here by its folder's name, like the same repository cloned on both Macs. Otherwise it gets its own card; Finder and Terminal buttons hide for folders that aren't on this Mac.
 - **The other Mac's hooks** run `factory hook`, not curl. If the board can't be reached (this Mac asleep or away), it gives up after 2 seconds and doesn't try again for a minute, so Claude Code there never slows down.
+- **Its worktrees.** This Mac can't look at that Mac's folders, so `factory hook` adds `factory_root` and `factory_worktree` to what it forwards: the repository and worktree the session is in. A worktree made with `git worktree add` anywhere then joins its repository's project and is named on the session. Its branch and loose ends need that Mac's board, synced through iCloud Drive.
 - **Security.**
   - With Other Macs off, the API listens on 127.0.0.1 only.
   - With it on, it listens on the network too, and every request from another Mac must carry the token. Requests from this Mac still need none.
@@ -235,7 +241,7 @@ Settings › Morning Digest sets the time and the days (every day, or weekdays),
 - **What it covers.** The days since the last digest, through yesterday, for a week at most. Monday's includes the weekend, and a digest after a few days away covers them all. The numbers are the [Passport](#passport)'s, read again first so last night's work counts.
 - **What's been left.**
   - **Waiting on you:** questions, permission prompts and plans waiting for an answer, and blocked projects. A question older than a day stays on the list until the project moves on or its chat is archived.
-  - **Loose ends:** uncommitted or unpushed work in a project nobody has touched for a day. On this Mac, **Tidy loose ends** starts that prompt there.
+  - **Loose ends:** uncommitted or unpushed work in a project or its worktrees that nobody has touched for a day. On this Mac, **Tidy loose ends** starts that prompt in the project's own folder, when it has loose ends there.
   - **Old to-dos:** to-dos nobody has touched for a week. Tick them off, or start one in Claude.
 - **Snoozing.** The moon button on each item snoozes it for a day or a week, on every Mac. **Wake Them**, at the foot of Today, brings back everything snoozed.
 - **When it comes.** At the time you set, it waits until you've used the Mac in the last two minutes, so it arrives when you sit down. With nothing worked on and nothing left, it doesn't come.
@@ -245,7 +251,7 @@ Settings › Morning Digest sets the time and the days (every day, or weekdays),
 
 The iPhone app, Factory, shows the board your Macs keep, Today, and the Passport.
 
-- **The board.** Counts, what needs you and what's under way as cards in their state's color, and every other project. Tap one for what's happening, its progress, sessions, to-dos and timeline. Pull to refresh.
+- **The board.** Counts, what needs you and what's under way as cards in their state's color, and every other project. Tap one for what's happening, its progress, sessions (with the worktree and branch each runs in), loose ends, to-dos and timeline. Pull to refresh.
 - **Answer in Claude.** When a chat in Claude Desktop has Remote Control on, whatever it asks you (a question, a permission, your call, a block) gets an *Answer in Claude* button: on its card, on its page and in Today. It opens the chat in the Claude app, where you answer it and the Mac carries on. Working sessions get *Open in Claude*, to follow along. The board reads each chat's Remote Control session from Claude Desktop's file for it (`bridgeSessionIds`, newest last; none once you turn Remote Control off) whenever a turn ends, and it travels with the session to the iPhone and to your other Macs. Turn Remote Control on for a chat with the Remote Control switch in its toolbar, or for every new chat with Claude Desktop's *Connect new sessions to Remote Control* setting. Sessions in Terminal don't get the button.
 - **To-dos.** Add one on a project's page, tick one off, or press and hold to delete it. Your Macs pick up the change within about half a minute, and it shows on the phone at once.
 - **Today.** The same as on the Mac: the days since the last digest in numbers, then what's waiting on you, loose ends and old to-dos. Tick old to-dos off, or snooze any item for a day or a week, on every Mac.

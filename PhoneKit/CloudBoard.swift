@@ -55,6 +55,10 @@ nonisolated enum CloudBoard {
             session.transcript = nil
             return session
         }
+        // A worktree with nothing left in it matters only for the branch of a session there.
+        copy.looseEnds = project.looseEnds?.filter { ends in
+            !ends.isEmpty || ends.worktree == nil || copy.sessions.contains { $0.machine == ends.machine && $0.worktree == ends.worktree }
+        }
         return copy
     }
 

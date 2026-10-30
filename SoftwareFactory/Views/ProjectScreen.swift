@@ -68,6 +68,9 @@ struct ProjectContent: View {
                 if !project.sessions.isEmpty {
                     SessionsCard(project: project, now: now)
                 }
+                if project.looseEnds?.contains(where: { $0.worktree != nil }) == true {
+                    WorktreesCard(project: project, now: now)
+                }
                 let shown = Set(project.sessions.compactMap { store.chat(for: $0)?.id })
                 let others = store.chats(for: project).filter { !shown.contains($0.id) }
                 if !others.isEmpty {
@@ -273,9 +276,11 @@ private struct SessionsCard: View {
                 } else if let activity = session.activity, state == .working {
                     Text(activity).font(.system(size: 13)).foregroundStyle(Switchyard.textSecondary).lineLimit(1)
                 }
-                Text([session.machine, session.worktree ?? String(localized: "Main folder")].compactMap { $0 }.joined(separator: " · "))
+                place(session)
                     .font(.code(11))
                     .foregroundStyle(Switchyard.textTertiary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
             }
             Spacer(minLength: 8)
             VStack(alignment: .trailing, spacing: 0) {
@@ -292,6 +297,83 @@ private struct SessionsCard: View {
         }
         .padding(.top, 6)
         .contentShape(.rect)
+    }
+
+    /// "Ratatoskr · clever-elbakyan · ⑂ claude/clever-elbakyan": where it runs, and on what branch.
+    private func place(_ session: Session) -> Text {
+        let folder = [session.machine, session.worktree ?? String(localized: "Main folder")].compactMap { $0 }.joined(separator: " · ")
+        guard let branch = project.checkout(for: session)?.branch else { return Text(folder) }
+        return Text("\(folder) · \(Image(systemName: "arrow.triangle.branch")) \(branch)")
+    }
+}
+
+/// Each copy of the project's files, on each Mac: its own folder and its worktrees, with the branch
+/// each is on, what's left in it, and the sessions running there.
+private struct WorktreesCard: View {
+    let project: Project
+    let now: Date
+
+    var body: some View {
+        let live = project.liveSessions(at: now)
+        // Worktrees with nothing in them and no session there are a line each, at the foot.
+        let quiet = { (checkout: LooseEnds) in
+            checkout.worktree != nil && checkout.isEmpty && !project.sessions.contains { Self.runs($0, in: checkout) }
+        }
+        let checkouts = project.checkouts
+        Card(padding: 20) {
+            TrackedLabel(String(localized: "Worktrees"), size: 11, color: Switchyard.textTertiary)
+            ForEach(Array(checkouts.filter { !quiet($0) }.enumerated()), id: \.offset) { _, checkout in
+                row(checkout, live: live)
+            }
+            let rest = checkouts.filter(quiet)
+            if !rest.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(rest.count == 1 ? String(localized: "1 more, with nothing to commit or push")
+                         : String(localized: "\(rest.count) more, with nothing to commit or push"))
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Switchyard.textSecondary)
+                    ForEach(Array(rest.enumerated()), id: \.offset) { _, checkout in
+                        let name = [checkout.worktree, checkout.machine].compactMap { $0 }.joined(separator: " · ")
+                        Text("\(name) · \(Image(systemName: "arrow.triangle.branch")) \(checkout.branch ?? String(localized: "No branch"))")
+                            .font(.code(11))
+                            .foregroundStyle(Switchyard.textTertiary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                }
+                .padding(.top, 10)
+            }
+        }
+    }
+
+    private static func runs(_ session: Session, in checkout: LooseEnds) -> Bool {
+        session.machine == checkout.machine && session.worktree == checkout.worktree
+    }
+
+    private func row(_ checkout: LooseEnds, live: [Session]) -> some View {
+        let here = { (session: Session) in Self.runs(session, in: checkout) }
+        let sessions = project.sessions.filter(here).count
+        // A session at work there colors it, as it does the board.
+        let state = live.first(where: here)?.state ?? .idle
+        return HStack(alignment: .top, spacing: 12) {
+            SymbolTile(symbol: state != .idle ? state.symbol : checkout.worktree == nil ? "folder.fill" : "arrow.triangle.branch",
+                       swatch: state.swatch, size: 34)
+            VStack(alignment: .leading, spacing: 6) {
+                Text([checkout.worktree ?? String(localized: "Main folder"), checkout.machine].compactMap { $0 }.joined(separator: " · "))
+                    .font(.headline(16, weight: .semibold))
+                    .foregroundStyle(Switchyard.text)
+                    .lineLimit(1)
+                FlowChips {
+                    CodeChip(text: checkout.branch ?? String(localized: "No branch"), symbol: "arrow.triangle.branch")
+                    LooseEndsChips(ends: [checkout], showsPlace: false)
+                    if sessions > 0 {
+                        StatusChip(text: sessions == 1 ? String(localized: "1 session") : String(localized: "\(sessions) sessions"),
+                                   swatch: state == .idle ? nil : state.swatch, symbol: "rectangle.stack.fill")
+                    }
+                }
+            }
+        }
+        .padding(.top, 6)
     }
 }
 

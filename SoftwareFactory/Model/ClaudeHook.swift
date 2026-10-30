@@ -17,8 +17,13 @@ extension ProjectStore {
     func applyClaudeHook(_ payload: [String: Any], machine: String? = nil) -> Project? {
         guard let event = payload["hook_event_name"] as? String,
               let cwd = payload["cwd"] as? String,
-              let sessionID = payload["session_id"] as? String,
-              let id = projectID(forPath: cwd, create: true, machine: machine) else { return nil }
+              let sessionID = payload["session_id"] as? String else { return nil }
+        // Another Mac's folders can't be looked at from here: its factory command says which
+        // repository and worktree the session is in.
+        let checkout = machine == nil ? nil : payload["factory_root"] as? String
+        guard let id = projectID(forPath: checkout ?? cwd, create: true, machine: machine) else { return nil }
+        let worktree = checkout != nil ? payload["factory_worktree"] as? String
+            : machine == nil ? ProjectPath.worktree(in: cwd) : ProjectPath.namedWorktree(in: cwd)
         let now = Date.now
         // A session new to the board may be a Claude Desktop chat: find it, to link to it.
         if machine == nil, chatsBySession[sessionID] == nil, chatLookups[sessionID, default: 0] < 3 {
@@ -35,8 +40,9 @@ extension ProjectStore {
                 for index in p.events.indices where !earlier.contains(p.events[index].id) { p.events[index].machine = machine }
             }
             var s = p.sessions.first { $0.id == sessionID }
-                ?? Session(id: sessionID, state: .idle, worktree: ProjectPath.worktree(in: cwd), machine: machine,
-                           steps: [], started: now, updated: now, since: now)
+                ?? Session(id: sessionID, state: .idle, machine: machine, steps: [], started: now, updated: now, since: now)
+            // EnterWorktree moves a session into a worktree, and ExitWorktree back out.
+            s.worktree = worktree
             func set(_ state: ProjectState) {
                 if s.state != state { s.state = state; s.since = now }
             }

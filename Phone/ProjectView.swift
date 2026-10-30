@@ -67,7 +67,7 @@ struct ProjectView: View {
                 }
             }
 
-            if live.count > 1 || live.contains(where: { $0.machine != nil }) {
+            if live.count > 1 || live.contains(where: { $0.machine != nil || $0.worktree != nil }) {
                 SectionLabel(String(localized: "Sessions"), trailing: "\(live.count)")
                 Card(padding: 16) {
                     ForEach(live) { session in
@@ -76,8 +76,12 @@ struct ProjectView: View {
                             if let line = session.ask ?? session.message ?? session.task {
                                 Text(line).font(.headline(16, weight: .medium)).foregroundStyle(Switchyard.text)
                             }
-                            if let machine = session.machine {
-                                Text("On \(machine)").font(.system(size: 12)).foregroundStyle(Switchyard.textTertiary)
+                            // "On Ratatoskr · In clever-elbakyan · claude/clever-elbakyan"
+                            let place = [session.machine.map { String(localized: "On \($0)") },
+                                         session.worktree.map { String(localized: "In \($0)") },
+                                         session.worktree == nil ? nil : project.checkout(for: session)?.branch].compactMap { $0 }
+                            if !place.isEmpty {
+                                Text(place.joined(separator: " · ")).font(.system(size: 12)).foregroundStyle(Switchyard.textTertiary)
                             }
                             AnswerLink(session: session)
                                 .padding(.top, 4)

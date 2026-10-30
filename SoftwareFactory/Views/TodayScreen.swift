@@ -189,7 +189,8 @@ private struct LooseEndsRow: View {
         let project = store[nudge.project]
         let ends = nudge.looseEnds ?? []
         let tidy = prompts.all.first { $0.id == PromptStore.tidyLooseEnds && !$0.deleted }
-        let here = ends.contains { $0.machine == nil } && project?.isOnThisMac == true
+        // The starter opens a chat in the project's own folder, so only its loose ends are in reach.
+        let here = ends.contains { $0.machine == nil && $0.worktree == nil } && project?.isOnThisMac == true
         NudgeLine(nudge: nudge, swatch: .slate, now: now,
                   age: String(localized: "Quiet since \(nudge.since.formatted(date: .abbreviated, time: .shortened))")) {
             HStack(spacing: 6) { LooseEndsChips(ends: ends) }

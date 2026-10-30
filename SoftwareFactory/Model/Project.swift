@@ -205,16 +205,27 @@ struct Todo: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
-/// Work in a project's folder that hasn't gone anywhere yet: uncommitted changes, unpushed commits.
+/// One copy of a project's files, its own folder or one of its worktrees, with its branch and the
+/// work in it that hasn't gone anywhere yet: uncommitted changes, unpushed commits.
 struct LooseEnds: Codable, Hashable, Sendable {
     /// Files changed or added and not committed.
     var changes: Int
-    /// Commits not pushed to the branch's upstream.
+    /// Commits not pushed: ahead of the branch's upstream or, on a branch never pushed, on no remote
+    /// (nor, in a worktree, in the project's own folder).
     var unpushed: Int
     /// The other Mac it's on; nil for this one.
     var machine: String?
+    /// The worktree, by its folder's name; nil for the project's own folder.
+    var worktree: String?
+    /// Its branch; nil when it isn't on one.
+    var branch: String?
 
     var isEmpty: Bool { changes == 0 && unpushed == 0 }
+
+    /// " in clever-elbakyan on Ratatoskr": where it is, for a chip.
+    var place: String {
+        (worktree.map { String(localized: " in \($0)") } ?? "") + (machine.map { String(localized: " on \($0)") } ?? "")
+    }
 }
 
 /// Work a session started to come back to: a background command, an async agent, a monitor, a
@@ -496,6 +507,26 @@ extension Project {
 
     /// Loose ends worth showing: the ones that aren't empty.
     var openLooseEnds: [LooseEnds] { (looseEnds ?? []).filter { !$0.isEmpty } }
+
+    /// The copy of the project's files a session runs in: its worktree, or the project's own folder.
+    func checkout(for session: Session) -> LooseEnds? {
+        looseEnds?.first { $0.machine == session.machine && $0.worktree == session.worktree }
+    }
+
+    /// Each Mac's own folder first, then the worktrees with work in them or a session, then the rest.
+    var checkouts: [LooseEnds] {
+        let busy = Set(sessions.map { [$0.machine ?? "", $0.worktree ?? ""] })
+        func rank(_ checkout: LooseEnds) -> Int {
+            if checkout.worktree == nil { return 0 }
+            if !checkout.isEmpty { return 1 }
+            return busy.contains([checkout.machine ?? "", checkout.worktree ?? ""]) ? 2 : 3
+        }
+        return (looseEnds ?? []).sorted { a, b in
+            if rank(a) != rank(b) { return rank(a) < rank(b) }
+            if a.machine != b.machine { return (a.machine ?? "") < (b.machine ?? "") }
+            return (a.worktree ?? "").localizedStandardCompare(b.worktree ?? "") == .orderedAscending
+        }
+    }
 
     /// The checklist on show: the project's own milestone steps, or else the lead session's task list.
     func displaySteps(at now: Date) -> [Step] {

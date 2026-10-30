@@ -12,7 +12,8 @@ nonisolated enum Discovery {
         var repo: String?
         /// Newest first.
         var commits: [Commit]
-        var looseEnds: LooseEnds?
+        /// The project's own folder and each of its worktrees.
+        var looseEnds: [LooseEnds]
         var bundleID: String?
     }
 
@@ -72,7 +73,7 @@ nonisolated enum Discovery {
         let readme = readmeSummary(in: root)
         let (branch, commits) = gitHistory(in: root)
         return Found(root: root, lastActivity: lastActivity, kind: kind(of: root, readme: readme), readme: readme,
-                     branch: branch, repo: remote(in: root), commits: commits, looseEnds: looseEnds(in: root),
+                     branch: branch, repo: remote(in: root), commits: commits, looseEnds: checkouts(in: root),
                      bundleID: bundleID(in: root))
     }
 
@@ -96,20 +97,57 @@ nonisolated enum Discovery {
             .min { $0.count != $1.count ? $0.count < $1.count : $0 < $1 }
     }
 
-    /// Uncommitted files and commits ahead of the upstream, from one `git status`.
-    private static func looseEnds(in root: String) -> LooseEnds? {
+    /// The project's own folder and each of its worktrees, with its branch and its uncommitted
+    /// files and unpushed commits.
+    static func checkouts(in root: String) -> [LooseEnds] {
         guard FileManager.default.fileExists(atPath: root + "/.git"),
-              let output = run("/usr/bin/git", ["-C", root, "status", "--porcelain=v2", "--branch"]) else { return nil }
-        var changes = 0
-        var ahead = 0
+              let main = checkout(at: root, hasRemote: run("/usr/bin/git", ["-C", root, "remote"])?.trimmed != nil) else { return [] }
+        var found = [main.ends]
+        guard let list = run("/usr/bin/git", ["-C", root, "worktree", "list", "--porcelain"]) else { return found }
+        // Blocks of "worktree /path", "HEAD …", "branch refs/heads/…" or "detached", maybe "prunable …";
+        // the project's own folder first.
+        for block in list.components(separatedBy: "\n\n").dropFirst() {
+            let lines = block.split(separator: "\n")
+            guard let path = lines.first(where: { $0.hasPrefix("worktree ") })?.dropFirst("worktree ".count),
+                  !lines.contains(where: { $0.hasPrefix("prunable") || $0 == "bare" }),
+                  FileManager.default.fileExists(atPath: String(path)),
+                  var ends = checkout(at: String(path), hasRemote: main.hasRemote, excluding: main.head)?.ends else { continue }
+            ends.worktree = (String(path) as NSString).lastPathComponent
+            found.append(ends)
+        }
+        return found
+    }
+
+    /// One folder's branch, changes and unpushed commits, from `git status`; and its commit, for
+    /// worktrees to leave out what's already in it. A branch never pushed counts its commits on no
+    /// remote, and not in `excluding`.
+    private static func checkout(at folder: String, hasRemote: Bool, excluding: String? = nil)
+        -> (ends: LooseEnds, head: String?, hasRemote: Bool)? {
+        // No optional locks: a session committing in the folder mustn't find the index locked.
+        guard let output = run("/usr/bin/git", ["--no-optional-locks", "-C", folder, "status", "--porcelain=v2", "--branch"]) else { return nil }
+        var ends = LooseEnds(changes: 0, unpushed: 0)
+        var head: String?
+        var upstream = false
         for line in output.split(separator: "\n") {
-            if line.hasPrefix("# branch.ab "), let plus = line.split(separator: " ").first(where: { $0.hasPrefix("+") }) {
-                ahead = Int(plus.dropFirst()) ?? 0
+            if line.hasPrefix("# branch.oid ") {
+                head = String(line.dropFirst("# branch.oid ".count))
+            } else if line.hasPrefix("# branch.head ") {
+                let name = line.dropFirst("# branch.head ".count)
+                ends.branch = name == "(detached)" ? nil : String(name)
+            } else if line.hasPrefix("# branch.upstream ") {
+                upstream = true
+            } else if line.hasPrefix("# branch.ab "), let plus = line.split(separator: " ").first(where: { $0.hasPrefix("+") }) {
+                ends.unpushed = Int(plus.dropFirst()) ?? 0
             } else if !line.hasPrefix("#") {
-                changes += 1
+                ends.changes += 1
             }
         }
-        return LooseEnds(changes: changes, unpushed: ahead)
+        // An upstream that's gone was pushed and merged; a branch with none may never have been.
+        if !upstream, hasRemote, head != "(initial)" {
+            let count = run("/usr/bin/git", ["-C", folder, "rev-list", "--count", "HEAD", "--not", "--remotes"] + (excluding.map { [$0] } ?? []))
+            ends.unpushed = count.flatMap { Int($0.trimmingCharacters(in: .whitespacesAndNewlines)) } ?? 0
+        }
+        return (ends, head == "(initial)" ? nil : head, hasRemote)
     }
 
     /// The branch and the last 15 commits.
