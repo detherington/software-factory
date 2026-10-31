@@ -94,7 +94,7 @@ Switchyard is Rounds' Signal and Sojourny's Wayfinding, applied to a board of pr
   - Passport-style counts.
   - Sojourny's itinerary for the timeline.
 - **Liquid Glass is for controls only.** Content stays opaque.
-- **App icon.** A dark card on a violet field, holding a board of status lights.
+- **App icon.** A dark factory on a lime field, with a sawtooth roof and a chimney, and three windows lit in the state colors: amber, violet and mint. Unlike its siblings, it has no card: a grid of lights on one looked like a calendar, and too like Emanata's comic page.
 
 ## How a project's state is worked out
 

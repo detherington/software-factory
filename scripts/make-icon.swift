@@ -1,6 +1,7 @@
 // Renders Software Factory's app icons into the asset catalogs, the Mac app's and the iPhone app's,
-// in the family style of Rounds, Sojourny and Emanata: a dark rounded card on a swatch field. On the
-// card, a board of status lights in Switchyard's state colors.
+// in the family style of Rounds, Sojourny and Emanata: a dark shape on a swatch field. Here the shape is
+// a factory, with a sawtooth roof and a chimney, and its windows are lit in Switchyard's state colors.
+// (A card with a grid of lights looked like a calendar, and too like Emanata's comic page.)
 // Usage: swift scripts/make-icon.swift
 import AppKit
 
@@ -13,8 +14,7 @@ func color(_ hex: UInt32, _ alpha: CGFloat = 1) -> NSColor {
             blue: CGFloat(hex & 0xFF) / 255, alpha: alpha)
 }
 
-let amber = color(0xFFC43D), violet = color(0x9466FF), mint = color(0x3EDB98), ember = color(0xFF5533)
-let slate = color(0x8C95A8, 0.32)
+let amber = color(0xFFC43D), violet = color(0x9466FF), mint = color(0x3EDB98)
 
 /// Draws the artwork into a square of `side` pixels. `macShape` insets it into the macOS rounded-rect
 /// footprint; the iPhone's icon is full-bleed and masked by the system.
@@ -50,36 +50,51 @@ func render(side: Int, macShape: Bool = true) -> Data {
     // state on the board.
     NSGradient(colors: [color(0xC1E75A), color(0xA3CC35)])!.draw(in: tile, angle: -90)
 
-    // The board: a dark card, slightly wide, with a soft shadow.
-    let card = CGRect(x: tile.minX + 150 * u, y: tile.minY + 190 * u, width: 724 * u, height: 644 * u)
-    let cardShape = NSBezierPath(roundedRect: card, xRadius: 92 * u, yRadius: 92 * u)
+    // The factory: three bays under a sawtooth roof, each with its steep face to the right, and a
+    // chimney. Soft at the base, sharp at the roof.
+    func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: tile.minX + x * u, y: tile.minY + y * u) }
+    let left: CGFloat = 150, right: CGFloat = 874, base: CGFloat = 190, eave: CGFloat = 610, peak: CGFloat = 790
+    let bay = (right - left) / 3
+    let factory = NSBezierPath()
+    factory.move(to: p(left, eave))
+    factory.appendArc(from: p(left, base), to: p(right, base), radius: 44 * u)
+    factory.appendArc(from: p(right, base), to: p(right, peak), radius: 44 * u)
+    factory.line(to: p(right, peak))
+    for bayIndex in (0..<3).reversed() {
+        let x = left + CGFloat(bayIndex) * bay
+        factory.line(to: p(x, eave))
+        if bayIndex > 0 { factory.line(to: p(x, peak)) }
+    }
+    factory.close()
+    factory.append(NSBezierPath(roundedRect: CGRect(origin: p(left + 50, eave - 40), size: CGSize(width: 76 * u, height: 330 * u)),
+                                xRadius: 16 * u, yRadius: 16 * u))
+    let bounds = CGRect(origin: p(left, base), size: CGSize(width: (right - left) * u, height: 710 * u))
     ctx.saveGState()
-    let cardShadow = NSShadow()
-    cardShadow.shadowColor = NSColor.black.withAlphaComponent(0.35)
-    cardShadow.shadowBlurRadius = 40 * u
-    cardShadow.shadowOffset = NSSize(width: 0, height: -14 * u)
-    cardShadow.set()
+    let shadow = NSShadow()
+    shadow.shadowColor = NSColor.black.withAlphaComponent(0.35)
+    shadow.shadowBlurRadius = 40 * u
+    shadow.shadowOffset = NSSize(width: 0, height: -14 * u)
+    shadow.set()
     color(0x1E1E23).setFill()
-    cardShape.fill()
+    factory.fill()
     ctx.restoreGState()
     ctx.saveGState()
-    cardShape.addClip()
-    NSGradient(colors: [color(0x2E2E35), color(0x17171B)])!.draw(in: card, angle: -90)
+    factory.addClip()
+    NSGradient(colors: [color(0x2E2E35), color(0x17171B)])!.draw(in: bounds, angle: -90)
     ctx.restoreGState()
 
-    // Status lights, three by three: one waiting, two at work, one shipped, one stuck, the rest at rest.
-    let lights: [[NSColor]] = [[amber, violet, slate], [slate, mint, violet], [slate, slate, ember]]
-    let inset = 70 * u, gap = 36 * u
-    let inner = card.insetBy(dx: inset, dy: inset)
-    let cell = CGSize(width: (inner.width - gap * 2) / 3, height: (inner.height - gap * 2) / 3)
-    for (row, colors) in lights.enumerated() {
-        for (column, fill) in colors.enumerated() {
-            let rect = CGRect(x: inner.minX + CGFloat(column) * (cell.width + gap),
-                              y: inner.maxY - CGFloat(row + 1) * cell.height - CGFloat(row) * gap,
-                              width: cell.width, height: cell.height)
-            fill.setFill()
-            NSBezierPath(roundedRect: rect, xRadius: 38 * u, yRadius: 38 * u).fill()
-        }
+    // A tall window in each bay, lit: one waiting on you, one at work, one shipped.
+    for (bayIndex, light) in [amber, violet, mint].enumerated() {
+        let x = left + CGFloat(bayIndex) * bay
+        let window = CGRect(origin: p(x + bay * 0.24, 270), size: CGSize(width: bay * 0.52 * u, height: 260 * u))
+        ctx.saveGState()
+        let glow = NSShadow()
+        glow.shadowColor = light.withAlphaComponent(0.7)
+        glow.shadowBlurRadius = 36 * u
+        glow.set()
+        light.setFill()
+        NSBezierPath(roundedRect: window, xRadius: 34 * u, yRadius: 34 * u).fill()
+        ctx.restoreGState()
     }
     ctx.restoreGState()
 
