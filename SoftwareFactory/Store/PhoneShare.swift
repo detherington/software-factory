@@ -323,6 +323,11 @@ final class PhoneShare {
             let answered = store.answerPermission(id, reply: reply, from: String(localized: "the iPhone"))
             // One this Mac never had is another Mac's to answer, for as long as its hook could wait.
             return answered || known || now.timeIntervalSince(change.answered ?? .distantPast) > ClaudeSetup.permissionWait
+        case .reply:
+            guard let session = change.session, let text = change.text else { return true }
+            let known = store.local.values.contains { $0.sessions.contains { $0.id == session } }
+            let sent = store.reply(to: session, text: text, from: String(localized: "the iPhone"))
+            return sent || known || now.timeIntervalSince(change.answered ?? .distantPast) > ClaudeSetup.replyWait
         }
     }
 
@@ -398,7 +403,10 @@ final class PhoneShare {
                     continue
                 }
                 guard now.timeIntervalSince(session.since) >= alertDelay else { continue }
-                let id = "\(session.id).\(session.state.rawValue).\(Int(session.since.timeIntervalSince1970))"
+                // One a reply can still reach is named for it, so the iPhone gives it buttons and Reply.
+                let id = session.ask != nil && session.canReply(at: now)
+                    ? PermissionAlert.replyRecordName(for: session.id, since: session.since, options: session.askOptions?.count ?? 0)
+                    : "\(session.id).\(session.state.rawValue).\(Int(session.since.timeIntervalSince1970))"
                 guard !sent.contains(id) else { continue }
                 let (title, body) = text(for: session.state, project: project, session: session)
                 alerts.append(Alert(id: id, title: title, body: body, project: project.id))
@@ -425,9 +433,9 @@ final class PhoneShare {
     nonisolated private static func text(for state: ProjectState, project: Project, session: Session?) -> (String, String) {
         let name = project.name
         switch state {
-        case .yourCall: return (String(localized: "\(name): your call"), session?.ask ?? session?.message ?? "")
+        case .yourCall: return (String(localized: "\(name): your call"), session?.askWithOptions ?? session?.message ?? "")
         case .blocked: return (String(localized: "\(name) is blocked"), session?.message ?? project.note ?? "")
-        default: return (String(localized: "\(name) needs you"), session?.message ?? session?.task ?? "")
+        default: return (String(localized: "\(name) needs you"), session?.askWithOptions ?? session?.message ?? session?.task ?? "")
         }
     }
 

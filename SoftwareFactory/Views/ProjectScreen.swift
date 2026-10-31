@@ -138,6 +138,12 @@ private struct NowPanel: View {
                     }
                     .frame(maxWidth: 760, alignment: .leading)
                     .padding(.top, 6)
+                } else if let session = project.openReply(at: now) {
+                    ReplyPrompt(session: session, onFlood: true, answerable: PermissionDesk.shared.canReply(to: session.id)) { text in
+                        store.reply(to: session.id, text: text, from: String(localized: "this Mac"))
+                    }
+                    .frame(maxWidth: 760, alignment: .leading)
+                    .padding(.top, 6)
                 } else if let lead, lead.state == .background, let jobs = lead.jobsSummary(at: now) {
                     Label(String(localized: "Waiting on \(jobs)"), systemImage: "hourglass")
                         .font(.system(size: 14, weight: .semibold))

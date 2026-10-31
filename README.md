@@ -27,7 +27,7 @@ A status board for every coding project on this Mac: what's being worked on, wha
 - **Activity.** Every project's timeline, merged (⌘3).
 - **Passport.** Your week in numbers (⌘4): the hours Claude worked, sessions, commits, TestFlight builds, releases and tokens. Each day is a bar, each project a row, and milestones get stamps: a release, a new project, the busiest day, the longest turn, days in a row. Switch between this week, last week and the last 30 days. See [Passport](#passport).
 - **Notifications.** It tells you when something changes instead of waiting for you to look. Each kind can be switched off in Settings › Notifications:
-  - **Needs you, Your call, Blocked:** when a session enters one, with its message. These make a sound. A permission prompt's notice says what it would do in full and has **Allow** and **Deny**, which answer it without bringing the app forward. A question from Claude has a button for each option and **Reply…** for your own words.
+  - **Needs you, Your call, Blocked:** when a session enters one, with its message. These make a sound. A permission prompt's notice says what it would do in full and has **Allow** and **Deny**, which answer it without bringing the app forward. A question from Claude has a button for each option and **Reply…** for your own words. So does a turn that ended asking you something, while the session can still take a reply: the next-step box's buttons and **Reply…** wake it with your answer (see [Replies](#replies)).
   - **Background work finished:** a background command or agent.
   - **Shipped:** a release.
   - **TestFlight build ready:** a build has finished processing and can be tested.
@@ -121,7 +121,7 @@ A session in a worktree is named by the worktree's folder, wherever it is: a Cla
 curl -s -o /dev/null --connect-timeout 1 -m 3 -H 'Content-Type: application/json' --data-binary @- http://127.0.0.1:7720/api/hooks/claude || true # software-factory
 ```
 
-It prints nothing and always exits 0, so a closed app never gets in a session's way. The `PermissionRequest` hook is the one exception: it waits for the board's answer and prints it (see [Permission prompts](#permission-prompts)).
+It prints nothing and always exits 0, so a closed app never gets in a session's way. There are two exceptions. The `PermissionRequest` hook waits for the board's answer and prints it (see [Permission prompts](#permission-prompts)). A second `Stop` hook runs in the background and waits for a reply to the turn that ended (see [Replies](#replies)).
 
 | Event | What the board does |
 |---|---|
@@ -135,6 +135,22 @@ It prints nothing and always exits 0, so a closed app never gets in a session's 
 | `Stop` | Blocked if the turn ended on an API error; Your call (or Needs you) if Claude Desktop's next-step box asked a question; Background while work the session started hasn't reported back; otherwise Idle. Logs "Finished after 12 m" |
 | `StopFailure` | The turn ended on an API error: Blocked, with the error in words |
 | `SessionEnd` | Removes the session |
+
+### Replies
+
+When a turn ends, you can reply to it from the board, the iPhone or a notification, as if you'd written in the chat. Claude Desktop's next-step box (`wrap_up`) gives the turn's question its buttons, and the board shows them. Any turn takes your own words too. The second `Stop` hook is set up with `asyncRewake`, so Claude Code runs it in the background. Its request stays open until you reply, for up to two hours:
+
+```bash
+reply=$(curl -sf --connect-timeout 1 -m 7230 -H 'Content-Type: application/json' --data-binary @- http://127.0.0.1:7720/api/hooks/claude/reply) && [ -n "$reply" ] && { printf '%s\n' "$reply" >&2; exit 2; }; exit 0 # software-factory
+```
+
+- **What Claude is told.** The board answers the request with "The user replied from Software Factory, on the iPhone: Fix the thumb". The hook passes that on stderr and exits 2. That wakes the idle session at once, with the reply as a system reminder, and Claude carries on from it. With no reply, the board answers with nothing and the hook exits 0.
+- **On the board.** A card whose turn ended asking you something shows the next-step box's buttons. The project's page adds a box for your own words. Buttons for the app's own actions (commit, create a PR) stay in Claude Desktop. The timeline logs "Replied on this Mac" with what you said.
+- **In notifications.** On the Mac, "your call" and "needs you" notices for a turn's question have a button for each option, plus **Reply…** for your own words. So does "finished a turn", without the options. On the iPhone, the alert's record is named `reply.<session>.<time>.<options>`, and the body lists the options on its last line. The notification extension makes buttons of them (up to four) and adds **Reply…**. The reply goes to your Macs through the iCloud inbox, like an answer to a prompt.
+- **When it's too late.** Writing in Claude instead ends the wait, as does the session's process stopping. Claude Desktop stops a chat's process half an hour after its turn ends, and the hook goes with it. After that the buttons go, and the question waits for you in Claude. A reply that arrives too late isn't sent, and the timeline says "Couldn't pass on your reply".
+- **Another Mac's sessions.** `factory hook --reply` waits the same way, writes the reply to stderr itself, and exits 2.
+- **Turning it off.** The same setting as permission prompts. With it off, the board answers at once with nothing.
+- `POST /api/sessions/{id}/reply` with `{"text": "…"}` replies from anywhere else, and says whether a hook was waiting: `{"sent": true}`.
 
 ### Permission prompts
 
@@ -276,6 +292,7 @@ Settings › Morning Digest sets the time and the days (every day, or weekdays),
 The iPhone app, Factory, shows the board your Macs keep, Today, and the Passport.
 
 - **The board.** Counts, what needs you and what's under way as cards in their state's color, and every other project. Tap one for what's happening, its progress, sessions (with the worktree and branch each runs in), loose ends, to-dos and timeline. Pull to refresh.
+- **Reply.** A turn that ended asking you something shows the next-step box's buttons on its card. Its page adds a box for your own words. Your Mac wakes the session with the reply. See [Replies](#replies).
 - **Allow or deny.** A permission prompt the board can answer shows what Claude asks to run, write or fetch, with **Allow** and **Deny**, on its card and its page. Your Mac passes the answer to Claude within a few seconds; until then the prompt says it's on its way. See [Permission prompts](#permission-prompts).
 - **Answer in Claude.** When a chat in Claude Desktop has Remote Control on, whatever it asks you (a question, a permission, your call, a block) gets an *Answer in Claude* button: on its card, on its page and in Today. It opens the chat in the Claude app, where you answer it and the Mac carries on. Working sessions get *Open in Claude*, to follow along. The board reads each chat's Remote Control session from Claude Desktop's file for it (`bridgeSessionIds`, newest last; none once you turn Remote Control off) whenever a turn ends, and it travels with the session to the iPhone and to your other Macs. Turn Remote Control on for a chat with the Remote Control switch in its toolbar, or for every new chat with Claude Desktop's *Connect new sessions to Remote Control* setting. Sessions in Terminal don't get the button.
 - **To-dos.** Add one on a project's page, tick one off, or press and hold to delete it. Your Macs pick up the change within about half a minute, and it shows on the phone at once.
@@ -283,7 +300,7 @@ The iPhone app, Factory, shows the board your Macs keep, Today, and the Passport
 - **Passport.** This week, last week or the last 30 days, as on the Mac: the hours, sessions, commits, builds, releases and tokens, each day's hours, the projects and the stamps. A Mac adds up every Mac's numbers (with Sync on) and sends them with the board when they change. Tap a project or a stamp to open its project.
 - **Widgets.** *Board* (small, medium, large): what needs you, what's working and the latest of the rest. *Needs You* (Lock Screen): how many projects need you, and which. Tap a project to open it.
 - **The morning digest.** If nobody has used any of your Macs by three hours after its time (noon, for 9:00), it goes to the iPhone as an alert instead, and opens Today. Today on the Mac then says so.
-- **Alerts.** When something has needed you for two minutes (a question, your call, a block) and nobody has used any of your Macs for five, the iPhone gets a notification with Claude's message. A permission prompt the board can answer comes at once, with **Allow** and **Deny** on the alert itself; so does one of Claude's questions, which opens the project to choose, and a TestFlight crash or screenshot the board has just learned of. Each Mac shares when you last used it in `iCloud Drive/Software Factory/Presence/`. Settings › iPhone turns alerts off.
+- **Alerts.** When something has needed you for two minutes (a question, your call, a block) and nobody has used any of your Macs for five, the iPhone gets a notification with Claude's message. A permission prompt the board can answer comes at once, with **Allow** and **Deny** on the alert itself. So does one of Claude's questions, which opens the project to choose, and a TestFlight crash or screenshot the board has just learned of. A turn that ended asking you something, while your Mac can still pass on a reply, gets the next-step box's options and **Reply…** on the alert (see [Replies](#replies)). Each Mac shares when you last used it in `iCloud Drive/Software Factory/Presence/`. Settings › iPhone turns alerts off.
 - **How the board gets there.** Each Mac with Settings › iPhone on saves every project, a few seconds after it changes, to your private CloudKit database (container `iCloud.com.darrell.softwarefactory`, zone `Board`), without folder paths and with its latest 25 events, and today's digest and the Passport beside them. The Passport's record is a Project record named `factory.passport`, so the schema needs nothing new, and iPhone builds from before it, which find no project's id or name in it, pass over it. What you change on the iPhone goes to the `Inbox` zone; a Mac folds each change into the board (the later change to a to-do wins, as between Macs) and deletes it. Alerts are records too, which a subscription shows on the iPhone as notifications. The Mac makes that subscription when it's missing: iCloud has refused the iPhone's own save of it while taking the Mac's, and a subscription belongs to the iCloud account, not the device that made it. If the iPhone can't set up alerts, its board says why. Only a copy signed with the team can do this: `scripts/install.sh` signs with it when Xcode can, and otherwise signs locally, without iCloud.
 - **Two environments.** Debug builds use the container's development environment and Release builds (installed, TestFlight) production, so testing never touches the real board.
 
@@ -344,6 +361,8 @@ The API listens on `127.0.0.1:7720`, and only on this Mac unless Other Macs is o
 | GET | `/api/projects/{id}/crashes/{feedback}` | A TestFlight crash's log, as text. The ids are under `appStore.feedback` in the project |
 | POST | `/api/todos` | Adds one to the project a folder belongs to: `{"path": "…", "text": "…"}` (or `"project"`) |
 | POST | `/api/hooks/claude` | A Claude Code hook's input, unchanged. For a `PermissionRequest` it can answer, the board holds the request until it does and responds with Claude Code's decision (or nothing) |
+| POST | `/api/hooks/claude/reply` | The `Stop` hook that waits for a reply: the board holds it while you can reply, and responds with what wakes Claude (or nothing) |
+| POST | `/api/sessions/{id}/reply` | Replies to a session whose turn ended, as your next message: `{"text": "…"}`. Says whether its hook was waiting: `{"sent": true}` |
 | POST | `/api/permissions/{id}` | Answers a permission prompt: `{"allow": true}` or `{"allow": false}`; or a question: `{"answers": {"<question>": "<label>"}}`. Says whether a hook was waiting: `{"answered": true}` |
 | GET | `/api/prompts` | Saved prompts: `project` is a project's id, or missing for every project |
 | POST | `/api/prompts` | Saves one: `{"title": "…", "text": "…", "project": "…"}`, without `project` for every project |

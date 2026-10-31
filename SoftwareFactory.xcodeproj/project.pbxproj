@@ -148,6 +148,7 @@
 		EDF0323E71D482A13F36F87D /* TranscriptScan.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A202333F926B3A9E29FFB0 /* TranscriptScan.swift */; };
 		EEBC5DD502B86F62BB09DC31 /* WorktreeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38F7BA4E8383B5B734461838 /* WorktreeTests.swift */; };
 		EF12394E9693EB28DCDECEBE /* Report.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAEE6799FC5F4B9F63B79D08 /* Report.swift */; };
+		F13DAF09AA0222263484761A /* ReplyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04AB8D5CBCEFC795C554C480 /* ReplyTests.swift */; };
 		F3C7B1F91579E1F483B7CFA7 /* DesktopChats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40CE93F5B9EE1786B5009D1C /* DesktopChats.swift */; };
 		F465E2342AC74DAE243771B4 /* TranscriptTally.swift in Sources */ = {isa = PBXBuildFile; fileRef = 750986EBDE0BCB38AAA4A331 /* TranscriptTally.swift */; };
 		F52116BDFBB4668D8D6C8CB0 /* Passport.swift in Sources */ = {isa = PBXBuildFile; fileRef = D24E405E45B64954072FCFE9 /* Passport.swift */; };
@@ -213,6 +214,7 @@
 
 /* Begin PBXFileReference section */
 		02DC087BA4748B349A065F2E /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		04AB8D5CBCEFC795C554C480 /* ReplyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplyTests.swift; sourceTree = "<group>"; };
 		0643822BA032DA6D23220A7A /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		0A37994D244EC3366BA22E8B /* JSONDates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONDates.swift; sourceTree = "<group>"; };
 		0BF38F580CC5C5382F30EEDE /* PassportScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PassportScreen.swift; sourceTree = "<group>"; };
@@ -474,6 +476,7 @@
 				A47C1CE9D995DD6341E664F1 /* PassportTests.swift */,
 				4A198D1454BDC1B9497324F6 /* PermissionTests.swift */,
 				E891227F615808B2047D8DA0 /* PhoneChangeTests.swift */,
+				04AB8D5CBCEFC795C554C480 /* ReplyTests.swift */,
 				5CD2244F87063825DC24265E /* TestBoard.swift */,
 				38F7BA4E8383B5B734461838 /* WorktreeTests.swift */,
 			);
@@ -855,6 +858,7 @@
 				5097B862E6008E345953F543 /* ProjectStore.swift in Sources */,
 				07B217E4B822ABB73539B43B /* PromptStore.swift in Sources */,
 				1EE73DE78EA241CC0105EFC3 /* PromptsCard.swift in Sources */,
+				F13DAF09AA0222263484761A /* ReplyTests.swift in Sources */,
 				4C97D791C7E6D60D39B1D27D /* Report.swift in Sources */,
 				2B09534EE81145C5B1B994BB /* RootView.swift in Sources */,
 				028D41517A004F0ADA028E2E /* ServerController.swift in Sources */,

@@ -164,7 +164,7 @@ nonisolated enum CloudBoard {
 
     /// Something changed on the iPhone, for the Macs to fold in.
     struct Change: Codable, Sendable {
-        enum Kind: String, Codable, Sendable { case todo, snooze, permission }
+        enum Kind: String, Codable, Sendable { case todo, snooze, permission, reply }
 
         var kind: Kind
         /// The project, as the board the iPhone saw names it, and its name, to find it on any Mac.
@@ -181,6 +181,9 @@ nonisolated enum CloudBoard {
         var allow: Bool?
         var answered: Date?
         var answers: [String: String]?
+        /// A reply to a session whose turn ended: the session, and what you said (sent `answered`).
+        var session: String?
+        var text: String?
     }
 
     static func record(for change: Change) throws -> CKRecord {

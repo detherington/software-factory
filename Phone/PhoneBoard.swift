@@ -21,6 +21,8 @@ final class PhoneBoard {
     private(set) var problem: String?
     /// Permission prompts answered here, by id, until the Mac that holds them has passed it on.
     private(set) var answeredPermissions: [String: Bool] = [:]
+    /// Replies sent from here, by session, and when: until a Mac passes one on, its card says so.
+    private(set) var replied: [String: Date] = [:]
     private(set) var isRefreshing = false
     /// Ticks so relative times and stale sessions move on.
     private(set) var now = Date.now
@@ -163,17 +165,43 @@ final class PhoneBoard {
         await save(CloudBoard.Change(kind: .permission, project: project, permission: ask, allow: allow, answered: .now))
     }
 
-    /// Alerts for prompts settled since (answered anywhere, or their time up) leave Notification
-    /// Center. One that just came may be newer than the board fetched, so it stays a minute.
+    /// Replies to a session whose turn ended, from its card: the Mac whose hook waits on it passes it on.
+    func reply(to session: Session, text: String, in project: Project) {
+        replied[session.id] = .now
+        send(CloudBoard.Change(kind: .reply, project: project.id, projectName: project.name, answered: .now, session: session.id, text: text))
+    }
+
+    /// Replies from an alert's buttons or Reply, perhaps with the app in the background: done once the
+    /// reply is in the inbox.
+    func reply(session: String, text: String, project: String?) async {
+        replied[session] = .now
+        await save(CloudBoard.Change(kind: .reply, project: project, answered: .now, session: session, text: text))
+    }
+
+    /// Whether a reply sent from here is still on its way to the session's turn that ended.
+    func hasReplied(to session: Session) -> Bool {
+        (replied[session.id] ?? .distantPast) > session.since
+    }
+
+    /// Alerts for prompts settled since (answered anywhere, or their time up), and for turns a reply
+    /// can no longer reach, leave Notification Center, and so do the reply buttons the extension
+    /// made for them. One that just came may be newer than the board fetched, so it stays a minute.
     private func clearSettledAlerts() async {
         let now = Date.now
         let open = Set(projects.flatMap { $0.sessions.compactMap { $0.permission?.isOpen(at: now) == true ? $0.permission?.id : nil } })
+        let replying = Set(projects.flatMap { $0.sessions.filter { $0.ask != nil && $0.canReply(at: now) }.map(\.id) })
         let center = UNUserNotificationCenter.current()
         let settled = await center.deliveredNotifications().filter { notification in
-            guard let ask = PermissionAlert.prompt(in: notification.request.content.userInfo) else { return false }
-            return !open.contains(ask) && now.timeIntervalSince(notification.date) > 60
+            guard now.timeIntervalSince(notification.date) > 60 else { return false }
+            let info = notification.request.content.userInfo
+            if let session = PermissionAlert.replySession(in: info) { return !replying.contains(session) }
+            guard let ask = PermissionAlert.prompt(in: info) else { return false }
+            return !open.contains(ask)
         }
         center.removeDeliveredNotifications(withIdentifiers: settled.map(\.request.identifier))
+        let categories = await center.notificationCategories()
+        let kept = categories.filter { !$0.identifier.hasPrefix("reply.") || replying.contains(String($0.identifier.dropFirst("reply.".count))) }
+        if kept.count < categories.count { center.setNotificationCategories(kept) }
     }
 
     /// Hides a nudge from Today, here and on the Macs, for a day or a week.
@@ -220,6 +248,7 @@ final class PhoneBoard {
         // A prompt is done with once no session asks it any more.
         let asked = Set(projects.flatMap { $0.sessions.compactMap { $0.permission?.id } })
         answeredPermissions = answeredPermissions.filter { asked.contains($0.key) }
+        replied = replied.filter { Date.now.timeIntervalSince($0.value) < 86_400 }
         for (id, item) in pendingTodos {
             let fetched = projects.first { $0.id == item.project }?.todos?.first { $0.id == id }
             if let fetched, fetched.updated >= item.todo.updated { pendingTodos[id] = nil } else { apply(item.todo, to: item.project) }

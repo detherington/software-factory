@@ -172,6 +172,10 @@ private struct LiveTile: View {
                 PermissionPrompt(ask: ask, onFlood: true, sent: board.answeredPermissions[ask.id], compact: true) { reply in
                     board.answer(ask, reply: reply, in: project)
                 }
+            } else if let session = project.openReply(at: now), session.askOptions != nil {
+                ReplyPrompt(session: session, onFlood: true, sent: board.hasReplied(to: session), compact: true) { text in
+                    board.reply(to: session, text: text, in: project)
+                }
             } else if let session = project.answerable(at: now) {
                 AnswerLink(session: session, onFlood: true)
             }

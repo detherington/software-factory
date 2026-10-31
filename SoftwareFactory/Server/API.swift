@@ -16,7 +16,9 @@ import Foundation
 ///     POST   /api/todos                 adds one to the project a folder belongs to: {"path": "…", "text": "…"}
 ///     POST   /api/hooks/claude          a Claude Code hook's input, unchanged; a PermissionRequest waits
 ///                                       for an answer from the board, and gets Claude Code's decision
+///     POST   /api/hooks/claude/reply    the Stop hook that waits for a reply from the board, and gets it
 ///     POST   /api/permissions/{id}      answers a permission prompt: {"allow": true}
+///     POST   /api/sessions/{id}/reply   replies to a session whose turn ended: {"text": "…"}
 ///     GET    /api/factory               the factory command, for setting up another Mac
 ///
 /// From this Mac, anything goes. Other Macs (with Settings › Other Macs on) send the token as
@@ -51,10 +53,11 @@ enum API {
         let parts = request.path.split(separator: "/").map(String.init)
         let isProject = parts.count >= 3 && parts[0] == "api" && parts[1] == "projects"
         let isPermission = parts.count == 3 && parts[0] == "api" && parts[1] == "permissions"
+        let isSession = parts.count == 4 && parts[0] == "api" && parts[1] == "sessions"
         let route = isProject
             ? (["api", "projects", "*"] + parts.dropFirst(3).enumerated().map { $0.offset == 1 ? "*" : $0.element }).joined(separator: "/")
-            : isPermission ? "api/permissions/*" : parts.joined(separator: "/")
-        let key = isProject || isPermission ? parts[2] : ""
+            : isPermission ? "api/permissions/*" : isSession ? "api/sessions/*/" + parts[3] : parts.joined(separator: "/")
+        let key = isProject || isPermission || isSession ? parts[2] : ""
         let todoKey = parts.count == 5 ? parts[4] : ""
         do {
             switch (request.method, route) {
@@ -143,6 +146,17 @@ enum API {
                 }
                 let project = store.applyClaudeHook(payload, machine: machine)
                 return .json(Data("{\"ok\":true,\"project\":\(project.map { "\"\($0.id)\"" } ?? "null")}".utf8))
+            case ("POST", "api/hooks/claude/reply"):
+                guard let payload = try JSONSerialization.jsonObject(with: request.body) as? [String: Any],
+                      let sessionID = payload["session_id"] as? String else {
+                    return .error(400, "Send the Stop hook's JSON input as the body.")
+                }
+                return replyRequest(sessionID, store: store)
+            case ("POST", "api/sessions/*/reply"):
+                let body = try JSONSerialization.jsonObject(with: request.body) as? [String: Any]
+                guard let text = (body?["text"] as? String)?.trimmed else { return .error(400, "Send the reply as {\"text\": \"…\"}.") }
+                let sent = store.reply(to: key, text: text, from: machine ?? String(localized: "this Mac"))
+                return .json(Data("{\"sent\":\(sent)}".utf8))
             case ("POST", "api/permissions/*"):
                 let body = try JSONSerialization.jsonObject(with: request.body) as? [String: Any]
                 let reply: PermissionAsk.Reply
@@ -229,7 +243,8 @@ enum API {
                 return .json(try JSONSerialization.data(withJSONObject: ["written": written], options: .prettyPrinted))
             #endif
             case (_, "api/projects/*"), (_, "api/projects"), (_, "api/prompts"), (_, "api/digest"), (_, "api/project"), (_, "api/report"), (_, "api/hooks/claude"),
-                 (_, "api/projects/*/todos"), (_, "api/projects/*/todos/*"), (_, "api/todos"), (_, "api/permissions/*"):
+                 (_, "api/projects/*/todos"), (_, "api/projects/*/todos/*"), (_, "api/todos"), (_, "api/permissions/*"),
+                 (_, "api/hooks/claude/reply"), (_, "api/sessions/*/reply"):
                 return .error(405, "\(request.method) isn't supported here.")
             default:
                 return .error(404, "Nothing at \(request.path). GET / lists the endpoints.")
@@ -265,6 +280,20 @@ enum API {
                 return .text("")
             }
             return .json(PermissionDesk.decision(answer, input: input))
+        }
+        return response
+    }
+
+    /// A turn's end: while the board can reply, the reply hook's request is held open until you do,
+    /// and the response is what wakes Claude with it; or nothing, to leave the session be.
+    private static func replyRequest(_ sessionID: String, store: ProjectStore) -> HTTPResponse {
+        let until = Date.now.addingTimeInterval(ClaudeSetup.replyWait)
+        guard PermissionDesk.shared.isOn, store.replyOpened(sessionID, until: until) else { return .text("") }
+        var response = HTTPResponse.text("")
+        response.later = {
+            let message = await PermissionDesk.shared.reply(for: sessionID, until: until)
+            if message == nil { await store.replyLapsed(sessionID) }
+            return .text(message ?? "")
         }
         return response
     }
@@ -326,7 +355,8 @@ enum API {
         POST   /api/projects/{id}         a status report for that project (id, name or code)
         DELETE /api/projects/{id}         hide it from the board
         POST   /api/hooks/claude          a Claude Code hook's JSON input, unchanged
-        GET    /api/factory               the factory command, for setting up another Mac
+        POST   /api/sessions/{id}/reply   reply to a session whose turn ended: {"text": "…"}
+        GET    /api/factory              the factory command, for setting up another Mac
 
         Other Macs (Settings › Other Macs) send "Authorization: Bearer <token>" and
         "X-Factory-Machine: <name>". On another Mac: factory connect <this board's URL> --token <token>

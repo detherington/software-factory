@@ -19,6 +19,44 @@ nonisolated enum PermissionAlert {
     static func questionRecordName(for ask: String) -> String { questionPrefix + ask }
     private static let questionPrefix = "question."
 
+    /// A reply's alert: a turn that ended asking you something, while a Mac's hook waits for a reply.
+    /// Its name says how many options its body's last line lists, which the extension makes buttons of.
+    static func replyRecordName(for session: String, since: Date, options: Int) -> String {
+        replyPrefix + "\(session).\(Int(since.timeIntervalSince1970)).\(options)"
+    }
+    private static let replyPrefix = "reply."
+    /// Where the extension leaves the session a reply alert is for, and its options.
+    static let replyKey = "reply"
+    static let optionsKey = "options"
+    /// Between the options, on the body's last line.
+    static let optionSeparator = " · "
+
+    /// The session a reply alert's record is for, and how many options it lists.
+    static func reply(fromRecordName name: String) -> (session: String, options: Int)? {
+        guard name.hasPrefix(replyPrefix) else { return nil }
+        let parts = name.dropFirst(replyPrefix.count).split(separator: ".")
+        guard parts.count >= 3, let options = Int(parts[parts.count - 1]) else { return nil }
+        return (parts.dropLast(2).joined(separator: "."), options)
+    }
+
+    /// A reply alert's session and how many options it lists, from its push.
+    static func reply(in userInfo: [AnyHashable: Any]) -> (session: String, options: Int)? {
+        let name = (CKNotification(fromRemoteNotificationDictionary: userInfo) as? CKQueryNotification)?.recordID?.recordName
+        return name.flatMap(reply(fromRecordName:))
+    }
+
+    /// The session a reply alert is about, from what the extension left in it or its push.
+    static func replySession(in userInfo: [AnyHashable: Any]) -> String? {
+        userInfo[replyKey] as? String ?? reply(in: userInfo)?.session
+    }
+
+    /// The options a reply alert's body lists on its last line, when there are `count` of them.
+    static func options(inBody body: String, count: Int) -> [String] {
+        guard count > 0, let last = body.split(separator: "\n").last, body.contains("\n") else { return [] }
+        let options = last.components(separatedBy: optionSeparator)
+        return options.count == count ? options : []
+    }
+
     /// The prompt or question an alert is about, to clear it once it's settled; nil for any other.
     static func prompt(in userInfo: [AnyHashable: Any]) -> String? {
         if let ask = ask(in: userInfo) { return ask }

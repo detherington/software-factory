@@ -98,20 +98,23 @@ struct LiveCard: View {
         let live = project.liveSessions(at: now)
         let steps = project.displaySteps(at: now)
         let permission = project.openPermission(at: now)
+        // A reply's buttons, when the turn ended with some (the card has no room to type).
+        let reply = permission == nil ? project.openReply(at: now).flatMap { $0.askOptions == nil ? nil : $0 } : nil
         // A prompt's buttons can't sit inside the card's own button: with one, a tap opens the card.
-        if permission != nil {
-            content(state: state, live: live, steps: steps, permission: permission, now: now)
+        if permission != nil || reply != nil {
+            content(state: state, live: live, steps: steps, permission: permission, reply: reply, now: now)
                 .onTapGesture { navigator.open(project.id) }
                 .accessibilityAddTraits(.isButton)
                 .contextMenu { ProjectMenuItems(project: project) }
         } else {
-            Button { navigator.open(project.id) } label: { content(state: state, live: live, steps: steps, permission: nil, now: now) }
+            Button { navigator.open(project.id) } label: { content(state: state, live: live, steps: steps, permission: nil, reply: nil, now: now) }
                 .buttonStyle(.plain)
                 .contextMenu { ProjectMenuItems(project: project) }
         }
     }
 
-    private func content(state: ProjectState, live: [Session], steps: [Step], permission: (session: Session, ask: PermissionAsk)?, now: Date) -> some View {
+    private func content(state: ProjectState, live: [Session], steps: [Step], permission: (session: Session, ask: PermissionAsk)?,
+                         reply: Session?, now: Date) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
                 TrackedLabel(topLine(live: live), size: 11, color: Switchyard.ink.opacity(0.72))
@@ -135,6 +138,11 @@ struct LiveCard: View {
             if let ask = permission?.ask {
                 PermissionPrompt(ask: ask, onFlood: true, answerable: PermissionDesk.shared.isWaiting(for: ask.id), compact: true) { reply in
                     store.answerPermission(ask.id, reply: reply, from: String(localized: "this Mac"))
+                }
+                .padding(.top, 4)
+            } else if let reply {
+                ReplyPrompt(session: reply, onFlood: true, answerable: PermissionDesk.shared.canReply(to: reply.id), compact: true) { text in
+                    store.reply(to: reply.id, text: text, from: String(localized: "this Mac"))
                 }
                 .padding(.top, 4)
             }

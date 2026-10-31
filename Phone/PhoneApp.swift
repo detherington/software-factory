@@ -52,8 +52,8 @@ final class PhoneDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUs
         [.banner, .list, .sound]
     }
 
-    /// Tapping an alert opens its project; Allow or Deny answers its permission prompt, without opening
-    /// the app. On the main actor: Swift hands UIKit's completion handler back from wherever this
+    /// Tapping an alert opens its project; Allow or Deny answers its permission prompt, and a reply's
+    /// options or Reply answer a turn that ended, without opening the app. On the main actor: Swift hands UIKit's completion handler back from wherever this
     /// finishes, and UIKit aborts if that isn't the main thread (tapping an alert from the Home Screen did).
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
         let info = response.notification.request.content.userInfo
@@ -63,6 +63,17 @@ final class PhoneDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUs
         if action == PermissionAlert.allow || action == PermissionAlert.deny, let ask = PermissionAlert.ask(in: info) {
             await PhoneBoard.shared.answer(ask: ask, allow: action == PermissionAlert.allow, project: project)
             return
+        }
+        // A reply's option, or your own words.
+        if let session = PermissionAlert.replySession(in: info) {
+            let options = info[PermissionAlert.optionsKey] as? [String] ?? []
+            let index = action.hasPrefix("option.") ? Int(action.dropFirst("option.".count)) : nil
+            let text = action == "reply" ? (response as? UNTextInputNotificationResponse)?.userText
+                : index.flatMap { options.indices.contains($0) ? options[$0] : nil }
+            if let text = text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty {
+                await PhoneBoard.shared.reply(session: session, text: text, project: project)
+                return
+            }
         }
         guard let project else { return }
         PhoneBoard.shared.opened = project

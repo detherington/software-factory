@@ -12,6 +12,10 @@ import Foundation
 /// - Nothing waits past `ClaudeSetup.permissionWait`; then only Claude's own prompt can answer.
 /// - Claude's questions (AskUserQuestion) come the same way, and are answered with the options you
 ///   choose, which Claude Code takes as your answers.
+///
+/// Replies come at the end of a turn. A second Stop hook runs in the background and posts to the
+/// board, which holds its request open: a reply from the board (one of the next-step box's buttons,
+/// or your own words) is what the hook hands Claude Code, which wakes the session with it.
 @MainActor
 @Observable
 final class PermissionDesk {
@@ -36,6 +40,12 @@ final class PermissionDesk {
     var isWaiting: Bool { !waiting.isEmpty }
 
     func isWaiting(for id: String) -> Bool { waiting[id] != nil }
+
+    /// The Stop hooks waiting for a reply, by session; each wait has its own id, as a session's next
+    /// turn can end before the hook for the one before it has let go. Observed, like `waiting`.
+    private var replies: [String: (wait: UUID, continuation: CheckedContinuation<String?, Never>)] = [:]
+
+    func canReply(to sessionID: String) -> Bool { replies[sessionID] != nil }
 
     /// Hosts that show their own prompt while the hook waits, by `CLAUDE_CODE_ENTRYPOINT`.
     nonisolated static func hostsItsOwnPrompt(_ entrypoint: String?) -> Bool {
@@ -84,6 +94,47 @@ final class PermissionDesk {
         guard let continuation = waiting.removeValue(forKey: id) else { return false }
         continuation.resume(returning: answer)
         return true
+    }
+
+    /// Waits for a reply to the session whose turn just ended: what to wake it with, or nil when none
+    /// comes by `until`, or the hook stops waiting.
+    func reply(for sessionID: String, until: Date) async -> String? {
+        let wait = UUID()
+        let timeout = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(max(0, until.timeIntervalSinceNow)))
+            self?.settleReply(sessionID, with: nil, wait: wait)
+        }
+        defer { timeout.cancel() }
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                if Task.isCancelled {
+                    continuation.resume(returning: nil)
+                } else {
+                    replies[sessionID]?.continuation.resume(returning: nil)
+                    replies[sessionID] = (wait, continuation)
+                }
+            }
+        } onCancel: {
+            Task { @MainActor in self.settleReply(sessionID, with: nil, wait: wait) }
+        }
+    }
+
+    /// Hands the hook waiting on the session its reply, or nil to let it go; only the one wait, when
+    /// `wait` names it. Says whether one was waiting.
+    @discardableResult
+    func settleReply(_ sessionID: String, with message: String?, wait: UUID? = nil) -> Bool {
+        guard let waiting = replies[sessionID], wait == nil || waiting.wait == wait else { return false }
+        replies[sessionID] = nil
+        waiting.continuation.resume(returning: message)
+        return true
+    }
+
+    /// How a reply begins, as Claude reads it: the board knows the turn it starts by it.
+    nonisolated static let replyMarker = "The user replied from Software Factory"
+
+    /// What wakes Claude with your reply, from "this Mac", "the iPhone".
+    nonisolated static func wake(with text: String, from: String) -> String {
+        "\(replyMarker), on \(from): \(text)"
     }
 
     /// A prompt's notification, on the Mac and the iPhone: whose it is, and what it would do in full,
@@ -154,6 +205,57 @@ extension ProjectStore {
                         title: allow ? String(localized: "Allowed on \(from)") : String(localized: "Denied on \(from)"), detail: ask.summary))
         }
         return answered
+    }
+
+    /// A turn ended with the board able to reply until `until`: says whether it knows the session.
+    func replyOpened(_ sessionID: String, until: Date) -> Bool {
+        guard let project = local.values.first(where: { $0.sessions.contains { $0.id == sessionID } }) else { return false }
+        update(project.id) { p in
+            guard let index = p.sessions.firstIndex(where: { $0.id == sessionID }) else { return }
+            p.sessions[index].replyUntil = until
+        }
+        return true
+    }
+
+    /// The reply hook let go without a reply from here, and no other waits on the session.
+    func replyLapsed(_ sessionID: String) {
+        guard !PermissionDesk.shared.canReply(to: sessionID),
+              let project = local.values.first(where: { $0.sessions.contains { $0.id == sessionID && $0.replyUntil != nil } }) else { return }
+        update(project.id) { p in
+            guard let index = p.sessions.firstIndex(where: { $0.id == sessionID }) else { return }
+            p.sessions[index].replyUntil = nil
+        }
+    }
+
+    /// Sends `text` to the session whose turn ended, as your next message, from "this Mac" or "the
+    /// iPhone". Says whether its hook was there to take it: if not, it's to be written in Claude.
+    @discardableResult
+    func reply(to sessionID: String, text: String, from: String) -> Bool {
+        guard let text = text.trimmed else { return false }
+        let sent = PermissionDesk.shared.settleReply(sessionID, with: PermissionDesk.wake(with: text, from: from))
+        guard let project = local.values.first(where: { $0.sessions.contains { $0.id == sessionID } }) else { return sent }
+        update(project.id) { p in
+            guard let index = p.sessions.firstIndex(where: { $0.id == sessionID }) else { return }
+            let now = Date.now
+            p.sessions[index].replyUntil = nil
+            guard sent else {
+                p.log(Event(date: now, symbol: "exclamationmark.bubble.fill", title: String(localized: "Couldn't pass on your reply from \(from)"),
+                            detail: String(localized: "Its chat had stopped listening: \(text)")))
+                return
+            }
+            var s = p.sessions[index]
+            if s.state != .working { s.state = .working; s.since = now }
+            s.updated = now
+            s.message = nil
+            s.ask = nil
+            s.askBlocks = nil
+            s.askOptions = nil
+            s.activity = nil
+            s.appTurn = false
+            p.sessions[index] = s
+            p.log(Event(date: now, state: .working, symbol: "arrowshape.turn.up.left.fill", title: String(localized: "Replied on \(from)"), detail: text))
+        }
+        return sent
     }
 
     /// The hook stopped waiting on prompt `id` without an answer from here: only Claude can answer it now.

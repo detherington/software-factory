@@ -223,6 +223,14 @@ private struct Now: View {
                     if let session = project.openable(at: now) {
                         AnswerLink(session: session, onFlood: true)
                     }
+                } else if let session = project.openReply(at: now) {
+                    ReplyPrompt(session: session, onFlood: true, sent: board.hasReplied(to: session)) { text in
+                        board.reply(to: session, text: text, in: project)
+                    }
+                    .padding(.top, 8)
+                    if let session = project.openable(at: now) {
+                        AnswerLink(session: session, onFlood: true)
+                    }
                 } else if let session = project.openable(at: now) {
                     AnswerLink(session: session, onFlood: true)
                         .padding(.top, 8)

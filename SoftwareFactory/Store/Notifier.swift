@@ -294,8 +294,8 @@ final class Notifier {
     private func notice(_ kind: Kind, key: String, project: Project, session: Session?, place: String?) -> Notice {
         let name = project.name
         let (title, body): (String, String) = switch kind {
-        case .needsYou: (String(localized: "\(name) needs you"), session?.message ?? session?.task ?? "")
-        case .yourCall: (String(localized: "\(name): your call"), session?.message ?? session?.ask ?? "")
+        case .needsYou: (String(localized: "\(name) needs you"), session?.askWithOptions ?? session?.message ?? session?.task ?? "")
+        case .yourCall: (String(localized: "\(name): your call"), session?.askWithOptions ?? session?.message ?? "")
         case .blocked: (String(localized: "\(name) is blocked"), session?.message ?? project.note ?? "")
         case .backgroundDone: (String(localized: "\(name): background work finished"), "")
         case .shipped: (String(localized: "\(name) shipped"), project.note ?? project.task ?? "")
@@ -329,6 +329,16 @@ final class Notifier {
         }
         if sound, playsSound { content.sound = .default }
         let request = UNNotificationRequest(identifier: notice.key, content: content, trigger: nil)
+        // A turn that ended, while its hook here waits for a reply: the next-step box's buttons, and Reply.
+        if notice.permission == nil, notice.question == nil, let sessionID = notice.session, PermissionDesk.shared.canReply(to: sessionID),
+           ["needsYou", "yourCall", "finished", "reminder"].contains(notice.kind) {
+            let options = ProjectStore.shared.local.values.lazy.flatMap(\.sessions).first { $0.id == sessionID }?.askOptions ?? []
+            Task {
+                content.categoryIdentifier = await Self.registerReply(options, for: sessionID)
+                try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: notice.key, content: content, trigger: nil))
+            }
+            return
+        }
         // A question a hook here waits on gets its options as buttons, in a category of its own.
         if let id = notice.question, PermissionDesk.shared.isWaiting(for: id),
            let questions = ProjectStore.shared.local.values.lazy.flatMap(\.sessions).first(where: { $0.permission?.id == id })?.permission?.questions {
@@ -343,10 +353,8 @@ final class Notifier {
     }
 
     /// A question's notification category: one button per option for a question with one answer,
-    /// and Reply for your own words. Earlier questions' categories go, but for those still open.
+    /// and Reply for your own words.
     private static func register(_ questions: [PermissionAsk.Question], for id: String) async -> String {
-        let center = UNUserNotificationCenter.current()
-        let identifier = "question.\(id)"
         var actions: [UNNotificationAction] = []
         if questions.count == 1, !questions[0].multiSelect {
             actions = questions[0].options.prefix(8).enumerated().map { index, option in
@@ -359,8 +367,31 @@ final class Notifier {
                                                          textInputPlaceholder: String(localized: "Your answer")))
         }
         actions.append(UNNotificationAction(identifier: "open-chat", title: String(localized: "Open Chat"), options: [.foreground]))
-        let open = Set(ProjectStore.shared.local.values.flatMap(\.sessions).compactMap { $0.permission?.id }.map { "question.\($0)" })
-        var categories = await center.notificationCategories().filter { !$0.identifier.hasPrefix("question.") || open.contains($0.identifier) }
+        return await register(actions, as: "question.\(id)")
+    }
+
+    /// A reply's notification category: a button for each of the next-step box's options, and Reply
+    /// for your own words.
+    private static func registerReply(_ options: [String], for sessionID: String) async -> String {
+        var actions = options.prefix(8).enumerated().map { index, label in
+            UNNotificationAction(identifier: "option.\(index)", title: label, options: [])
+        }
+        actions.append(UNTextInputNotificationAction(identifier: "reply", title: String(localized: "Reply…"), options: [],
+                                                     textInputButtonTitle: String(localized: "Send"),
+                                                     textInputPlaceholder: String(localized: "Your reply")))
+        actions.append(UNNotificationAction(identifier: "open-chat", title: String(localized: "Open Chat"), options: [.foreground]))
+        return await register(actions, as: "reply.\(sessionID)")
+    }
+
+    /// Registers a category of a question's or a reply's own. Earlier ones go, but for those still open.
+    private static func register(_ actions: [UNNotificationAction], as identifier: String) async -> String {
+        let center = UNUserNotificationCenter.current()
+        let sessions = ProjectStore.shared.local.values.flatMap(\.sessions)
+        let open = Set(sessions.compactMap { $0.permission.map { "question.\($0.id)" } } + sessions.filter { $0.replyUntil != nil }.map { "reply.\($0.id)" })
+        var categories = await center.notificationCategories().filter { category in
+            category.identifier != identifier
+                && (!(category.identifier.hasPrefix("question.") || category.identifier.hasPrefix("reply.")) || open.contains(category.identifier))
+        }
         categories.insert(UNNotificationCategory(identifier: identifier, actions: actions, intentIdentifiers: []))
         center.setNotificationCategories(categories)
         return identifier
@@ -381,6 +412,11 @@ final class Notifier {
             store.answerPermission(permission, reply: .answers(answers), from: String(localized: "this Mac"))
             return
         }
+        // A reply's option, or your own words; if its hook has let go, the chat takes it instead.
+        if permission == nil, let reply = Self.reply(action: action, text: text, to: sessionID, in: store),
+           store.reply(to: sessionID, text: reply, from: String(localized: "this Mac")) {
+            return
+        }
         if screen == "today" {
             Navigator.shared.selection = .today
             Navigator.shared.openBoard?()
@@ -395,6 +431,15 @@ final class Notifier {
         if !id.isEmpty { Navigator.shared.open(id) } else { Navigator.shared.selection = .board }
         Navigator.shared.openBoard?()
         NSApplication.shared.activate()
+    }
+
+    /// What a reply notification's button ("option.1") or Reply (`text`) says.
+    static func reply(action: String, text: String?, to sessionID: String, in store: ProjectStore) -> String? {
+        if action == "reply" { return text?.trimmed }
+        guard action.hasPrefix("option."), let index = Int(action.dropFirst("option.".count)),
+              let options = store.local.values.lazy.flatMap(\.sessions).first(where: { $0.id == sessionID })?.askOptions,
+              options.indices.contains(index) else { return nil }
+        return options[index]
     }
 
     /// What a question notification's button ("option.1") or Reply (`text`) answers, by question.

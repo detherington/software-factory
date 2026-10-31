@@ -234,6 +234,9 @@ struct QuestionPrompt: View {
     /// Answered from here; waiting for a Mac to pass it on.
     var sent = false
     var compact = false
+    /// The box for your own words, and what's said once you've answered.
+    var typePrompt = String(localized: "Or type your own answer")
+    var sentLabel = String(localized: "Answered. Waiting for your Mac to pass it on…")
     let answer: ([String: String]) -> Void
 
     @State private var chosen: [String: Set<String>] = [:]
@@ -273,7 +276,7 @@ struct QuestionPrompt: View {
                         optionButton(option, in: question, ink: ink)
                     }
                     if answerable, !sent, !compact {
-                        TextField(String(localized: "Or type your own answer"), text: binding(for: question))
+                        TextField(typePrompt, text: binding(for: question))
                             .textFieldStyle(.plain)
                             .font(.system(size: 14))
                             .foregroundStyle(ink)
@@ -285,7 +288,7 @@ struct QuestionPrompt: View {
                 }
             }
             if sent {
-                Label(String(localized: "Answered. Waiting for your Mac to pass it on…"), systemImage: "text.bubble.fill")
+                Label(sentLabel, systemImage: "text.bubble.fill")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(ink.opacity(0.8))
             } else if answerable, !answersAtOnce || !(typed[questions[0].question] ?? "").isEmpty {
@@ -349,6 +352,28 @@ struct QuestionPrompt: View {
     }
 }
 
+/// A reply to a turn that ended asking you something, from the board or the iPhone: one of Claude
+/// Desktop's next-step buttons, or your own words, which wake the session as your next message.
+struct ReplyPrompt: View {
+    let session: Session
+    var onFlood = false
+    var answerable = true
+    var sent = false
+    /// Only the buttons, where room is short.
+    var compact = false
+    let reply: (String) -> Void
+
+    var body: some View {
+        let question = PermissionAsk.Question(question: session.ask ?? "",
+                                              options: (session.askOptions ?? []).map { PermissionAsk.Question.Option(label: $0) })
+        QuestionPrompt(questions: [question], onFlood: onFlood, answerable: answerable, sent: sent, compact: compact,
+                       typePrompt: question.options.isEmpty ? String(localized: "Reply to Claude") : String(localized: "Or type your own reply"),
+                       sentLabel: String(localized: "Sent. Waiting for your Mac to pass it on…")) { answers in
+            if let text = answers.values.first { reply(text) }
+        }
+    }
+}
+
 /// A prompt's capsule button: Allow, Deny, Answer.
 struct PromptButton: View {
     let title: String
@@ -380,6 +405,11 @@ extension Project {
             if let ask = session.permission, ask.isOpen(at: now) { return (session, ask) }
         }
         return nil
+    }
+
+    /// The live session whose turn ended asking you something, while a reply can still reach it.
+    func openReply(at now: Date) -> Session? {
+        liveSessions(at: now).first { $0.state.needsYou && $0.ask != nil && $0.permission == nil && $0.canReply(at: now) }
     }
 }
 

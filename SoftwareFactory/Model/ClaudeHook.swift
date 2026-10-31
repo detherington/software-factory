@@ -58,6 +58,14 @@ extension ProjectStore {
                 PermissionDesk.shared.settle(ask.id, with: nil)
                 s.permission = nil
             }
+            // A reply waiting for you is done with once the session moves on without it: you wrote
+            // in Claude, or its process started again or stopped (and the hook with it). A compaction
+            // while it waits leaves the hook be.
+            if s.replyUntil != nil, ["UserPromptSubmit", "SessionStart", "SessionEnd"].contains(event),
+               payload["source"] as? String != "compact" {
+                PermissionDesk.shared.settleReply(sessionID, with: nil)
+                s.replyUntil = nil
+            }
 
             switch event {
             case "SessionStart":
@@ -76,6 +84,7 @@ extension ProjectStore {
                     set(.idle)
                     s.ask = nil
                     s.askBlocks = nil
+                    s.askOptions = nil
                 }
 
             case "UserPromptSubmit":
@@ -84,11 +93,16 @@ extension ProjectStore {
                 s.action = nil
                 s.ask = nil
                 s.askBlocks = nil
+                s.askOptions = nil
                 let prompt = payload["prompt"] as? String ?? ""
                 // Background work that reported back has ended; so has a wake-up that's now firing.
                 let ended = HookText.endedTasks(in: prompt)
                 s.background?.removeAll { ended.contains($0.id) || ($0.kind == .wakeup && ($0.until ?? .distantFuture) <= now.addingTimeInterval(30)) }
-                if let task = HookText.task(from: prompt) {
+                if prompt.contains(PermissionDesk.replyMarker) {
+                    // Your reply from the board or the iPhone woke it: logged as you sent it.
+                    s.appTurn = false
+                    s.activity = nil
+                } else if let task = HookText.task(from: prompt) {
                     s.appTurn = false
                     s.activity = nil
                     // A blocked report waits for you: your next word to the project, in any of its
@@ -139,6 +153,7 @@ extension ProjectStore {
                 if tool.hasSuffix("wrap_up") {
                     s.ask = (input["ask"] as? String)?.trimmed
                     s.askBlocks = input["blocked"] as? Bool
+                    s.askOptions = s.ask == nil ? nil : HookText.replies(in: input)
                 }
 
             case "PermissionRequest":
@@ -426,6 +441,16 @@ nonisolated enum HookText {
         case "PostToolUse": tool == ask.tool && (ask.isQuestion || permission(tool: tool, input: input).summary == ask.summary)
         default: false
         }
+    }
+
+    /// The next-step box's reply buttons, by label: what Claude Desktop sends as your next message
+    /// when you click one. A button for one of the app's own actions (commit, create a PR) does that
+    /// in the app instead, so it isn't one.
+    static func replies(in input: [String: Any]) -> [String]? {
+        let labels = (input["actions"] as? [[String: Any]] ?? []).compactMap { action -> String? in
+            action["action"] == nil ? (action["label"] as? String)?.trimmed : nil
+        }
+        return labels.isEmpty ? nil : labels
     }
 
     /// AskUserQuestion's questions, with their options; nil if it has none the board can show.
