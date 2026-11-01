@@ -290,6 +290,49 @@ struct ChatTests {
         #expect(store[TestBoard.projectID]?.todos?.first { $0.id == other.id }?.done == true)
     }
 
+    // MARK: - Answering another session
+
+    /// A Claude Desktop session's turn ended asking something: your answer carries it on in a chat here,
+    /// a fork with the conversation so far, whose first message is your answer, as you.
+    @Test func anAnswerCarriesASessionOnInAChat() async throws {
+        var arguments = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
+        arguments["FactoryClaudePath"] = try stub().path
+        UserDefaults.standard.setVolatileDomain(arguments, forName: UserDefaults.argumentDomain)
+        defer {
+            arguments["FactoryClaudePath"] = nil
+            UserDefaults.standard.setVolatileDomain(arguments, forName: UserDefaults.argumentDomain)
+        }
+        let store = TestBoard.make()
+        let folder = TestBoard.folder.appending(path: "Moth Radio \(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let transcript = folder.appending(path: "session.jsonl")
+        try String(decoding: try JSONSerialization.data(withJSONObject: [
+            "type": "user", "uuid": "1", "cwd": folder.path, "message": ["role": "user", "content": "Rig the glove for the fighter"],
+        ]), as: UTF8.self).write(to: transcript, atomically: true, encoding: .utf8)
+        let session = UUID().uuidString
+        store.hook("UserPromptSubmit", session, ["prompt": "Rig the glove for the fighter", "transcript_path": transcript.path])
+        store.hook("PostToolUse", session, ["tool_name": "mcp__ccd_turn__wrap_up",
+                                            "tool_input": ["ask": "Fix the thumb next?", "actions": [["label": "Fix the thumb"], ["label": "Leave it"]]] as [String: Any]])
+        store.hook("Stop", session)
+
+        let chat = try #require(store.continueInChat(session, saying: "Fix the thumb", from: "the iPhone", chat: "chat-from-the-iphone"))
+        #expect(chat == "chat-from-the-iphone")
+        #expect(host.chats[chat]?.continues == session)
+        #expect(host.chats[chat]?.folder == folder.path)
+        #expect(host.chats[chat]?.items.first?.text == "Rig the glove for the fighter")
+        #expect(await eventually { host.chats[chat]?.items.contains { $0.kind == .user && $0.text == "Fix the thumb" } == true })
+        // The session it came from stops asking, and the timeline says where it went.
+        #expect(store.session(session)?.state == .idle)
+        #expect(store.session(session)?.ask == nil)
+        #expect(store[TestBoard.projectID]?.events.first?.title == "Carried on in Software Factory, from the iPhone")
+        // Answering again goes to the same chat.
+        #expect(store.continueInChat(session, saying: "And the elbow", from: "the iPhone", chat: chat) == chat)
+
+        if let ask = host.chats[chat]?.ask { desk.settle(ask.id, with: PermissionDesk.Answer(allow: false, from: "this Mac")) }
+        host.stop(chat)
+        #expect(await eventually { !host.isHosting(chat) })
+    }
+
     @Test func noClaudeSaysSo() throws {
         var arguments = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
         arguments["FactoryClaudePath"] = "/nowhere/claude"

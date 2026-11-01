@@ -124,6 +124,7 @@ private struct NowPanel: View {
     let project: Project
     let now: Date
     @Environment(ProjectStore.self) private var store
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         let state = project.state(at: now)
@@ -149,8 +150,8 @@ private struct NowPanel: View {
                     .frame(maxWidth: 760, alignment: .leading)
                     .padding(.top, 6)
                 } else if let session = project.openReply(at: now) {
-                    ReplyPrompt(session: session, onFlood: true, answerable: PermissionDesk.shared.canReply(to: session.id)) { text in
-                        store.reply(to: session.id, text: text, from: String(localized: "this Mac"))
+                    ReplyPrompt(session: session, onFlood: true, answerable: store.canContinue(session)) { text in
+                        if let chat = store.continueInChat(session.id, saying: text, from: String(localized: "this Mac")) { openWindow(id: "chat", value: chat) }
                     }
                     .frame(maxWidth: 760, alignment: .leading)
                     .padding(.top, 6)

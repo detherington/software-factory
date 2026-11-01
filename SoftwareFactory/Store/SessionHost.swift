@@ -82,12 +82,11 @@ final class SessionHost {
 
     /// A chat that carries on `session`, started in Claude Desktop or Terminal, with the conversation
     /// so far. It's a fork, so the session itself is left as it was.
-    func continueSession(_ session: Session, in project: Project) -> String? {
+    func continueSession(_ session: Session, in project: Project, id: String = UUID().uuidString.lowercased()) -> String? {
         guard let transcript = session.transcript.map(URL.init(fileURLWithPath:)) else { return nil }
         let history = Self.history(of: transcript)
-        guard let folder = history.folder ?? project.path else { return nil }
+        guard let folder = history.folder ?? project.path, FileManager.default.fileExists(atPath: folder) else { return nil }
         load()
-        let id = UUID().uuidString.lowercased()
         chats[id] = HostedChat(id: id, project: project.id, title: session.task, items: history.items, status: .ended, updated: .now,
                                folder: folder, continues: session.id, machine: ProjectStore.shared.machineName)
         changed(id)

@@ -214,6 +214,7 @@ private struct Now: View {
     let project: Project
     let now: Date
     @Environment(PhoneBoard.self) private var board
+    @State private var openedChat: String?
 
     var body: some View {
         let state = project.state(at: now)
@@ -244,10 +245,12 @@ private struct Now: View {
                         AnswerLink(session: session, onFlood: true)
                     }
                 } else if let session = project.openReply(at: now) {
+                    // Your answer carries the session on in a chat a Mac runs, which opens here.
                     ReplyPrompt(session: session, onFlood: true, sent: board.hasReplied(to: session)) { text in
-                        board.reply(to: session, text: text, in: project)
+                        openedChat = board.reply(to: session, text: text, in: project)
                     }
                     .padding(.top, 8)
+                    .navigationDestination(item: $openedChat) { ChatView(project: project.id, id: $0) }
                     if let session = project.openable(at: now) {
                         AnswerLink(session: session, onFlood: true)
                     }

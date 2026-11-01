@@ -173,17 +173,24 @@ final class PhoneBoard {
         await save(CloudBoard.Change(kind: .permission, project: project, permission: ask, allow: allow, answered: .now))
     }
 
-    /// Replies to a session whose turn ended, from its card: the Mac whose hook waits on it passes it on.
-    func reply(to session: Session, text: String, in project: Project) {
+    /// Answers a session whose turn ended, from its card: the Mac that has it carries it on in a
+    /// chat, which starts with your answer. Returns the chat's id, which shows here at once.
+    @discardableResult
+    func reply(to session: Session, text: String, in project: Project) -> String {
         replied[session.id] = .now
-        send(CloudBoard.Change(kind: .reply, project: project.id, projectName: project.name, answered: .now, session: session.id, text: text))
+        let chat = UUID().uuidString.lowercased()
+        startedChats[chat] = HostedChat(id: chat, project: project.id, title: session.task, items: [ChatItem(id: "here-\(chat)", kind: .user, text: text, date: .now)],
+                                        status: .starting, updated: .now, continues: session.id)
+        applyWrittenLines()
+        send(CloudBoard.Change(kind: .reply, project: project.id, projectName: project.name, answered: .now, session: session.id, text: text, chat: chat))
+        return chat
     }
 
-    /// Replies from an alert's buttons or Reply, perhaps with the app in the background: done once the
-    /// reply is in the inbox.
+    /// Answers from an alert's buttons or Reply, perhaps with the app in the background: done once the
+    /// answer is in the inbox.
     func reply(session: String, text: String, project: String?) async {
         replied[session] = .now
-        await save(CloudBoard.Change(kind: .reply, project: project, answered: .now, session: session, text: text))
+        await save(CloudBoard.Change(kind: .reply, project: project, answered: .now, session: session, text: text, chat: UUID().uuidString.lowercased()))
     }
 
     /// Whether a reply sent from here is still on its way to the session's turn that ended.
@@ -197,7 +204,7 @@ final class PhoneBoard {
     private func clearSettledAlerts() async {
         let now = Date.now
         let open = Set(projects.flatMap { $0.sessions.compactMap { $0.permission?.isOpen(at: now) == true ? $0.permission?.id : nil } })
-        let replying = Set(projects.flatMap { $0.sessions.filter { $0.ask != nil && $0.canReply(at: now) }.map(\.id) })
+        let replying = Set(projects.flatMap { $0.sessions.filter { $0.ask != nil && $0.state.needsYou }.map(\.id) })
         let center = UNUserNotificationCenter.current()
         let settled = await center.deliveredNotifications().filter { notification in
             guard now.timeIntervalSince(notification.date) > 60 else { return false }

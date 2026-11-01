@@ -58,14 +58,6 @@ extension ProjectStore {
                 PermissionDesk.shared.settle(ask.id, with: nil)
                 s.permission = nil
             }
-            // A reply waiting for you is done with once the session moves on without it: you wrote
-            // in Claude, or its process started again or stopped (and the hook with it). A compaction
-            // while it waits leaves the hook be.
-            if s.replyUntil != nil, ["UserPromptSubmit", "SessionStart", "SessionEnd"].contains(event),
-               payload["source"] as? String != "compact" {
-                PermissionDesk.shared.settleReply(sessionID, with: nil)
-                s.replyUntil = nil
-            }
 
             switch event {
             case "SessionStart":
@@ -98,11 +90,7 @@ extension ProjectStore {
                 // Background work that reported back has ended; so has a wake-up that's now firing.
                 let ended = HookText.endedTasks(in: prompt)
                 s.background?.removeAll { ended.contains($0.id) || ($0.kind == .wakeup && ($0.until ?? .distantFuture) <= now.addingTimeInterval(30)) }
-                if prompt.contains(PermissionDesk.replyMarker) {
-                    // Your reply from the board or the iPhone woke it: logged as you sent it.
-                    s.appTurn = false
-                    s.activity = nil
-                } else if let task = HookText.task(from: prompt) {
+                if let task = HookText.task(from: prompt) {
                     s.appTurn = false
                     s.activity = nil
                     // A blocked report waits for you: your next word to the project, in any of its

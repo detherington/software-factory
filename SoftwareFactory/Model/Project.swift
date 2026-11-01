@@ -341,9 +341,6 @@ struct Session: Codable, Identifiable, Hashable, Sendable {
     var askBlocks: Bool?
     /// The box's buttons, by their labels: what you'd say back by picking one.
     var askOptions: [String]?
-    /// While its turn's Stop hook waits for a reply from the board, until when: a reply then wakes
-    /// it, as your next message.
-    var replyUntil: Date?
     /// Its chat's Remote Control session on claude.ai ("session_…"), when the chat is in Claude
     /// Desktop and has Remote Control on: the Claude app opens it, to answer from the iPhone.
     var remoteControl: String?
@@ -372,11 +369,6 @@ extension Session {
         guard let ask else { return nil }
         guard let options = askOptions, !options.isEmpty else { return ask }
         return ask + "\n" + options.joined(separator: PermissionAlert.optionSeparator)
-    }
-
-    /// Whether a reply from the board can reach it: its turn's Stop hook is waiting for one.
-    func canReply(at now: Date) -> Bool {
-        (replyUntil ?? .distantPast) > now
     }
 
     /// Its chat in the Claude app, through Remote Control.

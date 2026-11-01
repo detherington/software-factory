@@ -367,10 +367,11 @@ final class PhoneShare {
             // One this Mac never had is another Mac's to answer, for as long as its hook could wait.
             return answered || known || now.timeIntervalSince(change.answered ?? .distantPast) > ClaudeSetup.permissionWait
         case .reply:
+            // The session carries on in a chat here; one this Mac doesn't have waits a day for its Mac.
             guard let session = change.session, let text = change.text else { return true }
-            let known = store.local.values.contains { $0.sessions.contains { $0.id == session } }
-            let sent = store.reply(to: session, text: text, from: String(localized: "the iPhone"))
-            return sent || known || now.timeIntervalSince(change.answered ?? .distantPast) > ClaudeSetup.replyWait
+            let known = store.local.values.contains { $0.sessions.contains { $0.id == session && $0.machine == nil } }
+            let carried = store.continueInChat(session, saying: text, from: String(localized: "the iPhone"), chat: change.chat) != nil
+            return carried || known || now.timeIntervalSince(change.answered ?? .distantPast) > 86_400
         case .message, .interrupt, .start:
             return foldChat(change, into: store, host: host, now: now)
         }
@@ -471,8 +472,8 @@ final class PhoneShare {
                     continue
                 }
                 guard now.timeIntervalSince(session.since) >= alertDelay else { continue }
-                // One a reply can still reach is named for it, so the iPhone gives it buttons and Reply.
-                let id = session.ask != nil && session.canReply(at: now)
+                // One this Mac can carry on in a chat is named for it, so the iPhone gives it buttons and Reply.
+                let id = session.ask != nil && session.machine == nil && session.transcript != nil
                     ? PermissionAlert.replyRecordName(for: session.id, since: session.since, options: session.askOptions?.count ?? 0)
                     : "\(session.id).\(session.state.rawValue).\(Int(session.since.timeIntervalSince1970))"
                 guard !sent.contains(id) else { continue }

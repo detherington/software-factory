@@ -329,10 +329,11 @@ final class Notifier {
         }
         if sound, playsSound { content.sound = .default }
         let request = UNNotificationRequest(identifier: notice.key, content: content, trigger: nil)
-        // A turn that ended, while its hook here waits for a reply: the next-step box's buttons, and Reply.
-        if notice.permission == nil, notice.question == nil, let sessionID = notice.session, PermissionDesk.shared.canReply(to: sessionID),
-           ["needsYou", "yourCall", "finished", "reminder"].contains(notice.kind) {
-            let options = ProjectStore.shared.local.values.lazy.flatMap(\.sessions).first { $0.id == sessionID }?.askOptions ?? []
+        // A turn that ended, in a session this Mac can carry on in a chat: the next-step box's buttons, and Reply.
+        if notice.permission == nil, notice.question == nil, let sessionID = notice.session,
+           let session = ProjectStore.shared.local.values.lazy.flatMap(\.sessions).first(where: { $0.id == sessionID }),
+           ProjectStore.shared.canContinue(session), ["needsYou", "yourCall", "finished", "reminder"].contains(notice.kind) {
+            let options = session.askOptions ?? []
             Task {
                 content.categoryIdentifier = await Self.registerReply(options, for: sessionID)
                 try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: notice.key, content: content, trigger: nil))
@@ -387,7 +388,7 @@ final class Notifier {
     private static func register(_ actions: [UNNotificationAction], as identifier: String) async -> String {
         let center = UNUserNotificationCenter.current()
         let sessions = ProjectStore.shared.local.values.flatMap(\.sessions)
-        let open = Set(sessions.compactMap { $0.permission.map { "question.\($0.id)" } } + sessions.filter { $0.replyUntil != nil }.map { "reply.\($0.id)" })
+        let open = Set(sessions.compactMap { $0.permission.map { "question.\($0.id)" } } + sessions.filter { $0.ask != nil }.map { "reply.\($0.id)" })
         var categories = await center.notificationCategories().filter { category in
             category.identifier != identifier
                 && (!(category.identifier.hasPrefix("question.") || category.identifier.hasPrefix("reply.")) || open.contains(category.identifier))
@@ -412,9 +413,11 @@ final class Notifier {
             store.answerPermission(permission, reply: .answers(answers), from: String(localized: "this Mac"))
             return
         }
-        // A reply's option, or your own words; if its hook has let go, the chat takes it instead.
+        // A reply's option, or your own words: the session carries on in a chat here, which opens.
         if permission == nil, let reply = Self.reply(action: action, text: text, to: sessionID, in: store),
-           store.reply(to: sessionID, text: reply, from: String(localized: "this Mac")) {
+           let chat = store.continueInChat(sessionID, saying: reply, from: String(localized: "this Mac")) {
+            Navigator.shared.openChat?(chat)
+            NSApplication.shared.activate()
             return
         }
         if screen == "today" {

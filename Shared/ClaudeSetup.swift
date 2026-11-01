@@ -4,9 +4,7 @@ import Foundation
 /// every session reports in on its own. Shared by the app's Settings and `factory install-hooks`.
 ///
 /// Each hook posts its JSON input to the board and always exits 0, printing nothing; but the
-/// PermissionRequest hook waits for the board's answer to the prompt, and prints that, and a second
-/// Stop hook runs in the background once a turn ends, waiting for a reply from the board: it hands
-/// Claude Code the reply and exits 2, which wakes the session with it as your next message.
+/// PermissionRequest hook waits for the board's answer to the prompt, and prints that.
 /// - On the board's own Mac it's curl to 127.0.0.1: with the app closed, curl fails in a
 ///   millisecond and Claude Code carries on.
 /// - On another Mac it's `factory hook`, which reads the board's address and token from
@@ -52,21 +50,6 @@ nonisolated enum ClaudeSetup {
         "'\(path.replacingOccurrences(of: "'", with: "'\\''"))' hook 2>/dev/null || true \(marker)"
     }
 
-    /// How long the reply hook waits for a reply after a turn ends. Claude Desktop stops a chat's
-    /// process half an hour after its turn ends, and the hook with it; a Terminal session keeps on.
-    static let replyWait: TimeInterval = 2 * 60 * 60
-
-    /// The reply hook on the board's own Mac: the board answers with your reply, or nothing.
-    static func replyCommand(port: UInt16) -> String {
-        "reply=$(curl -sf --connect-timeout 1 -m \(Int(replyWait) + 30) -H 'Content-Type: application/json' --data-binary @- "
-            + "http://127.0.0.1:\(port)/api/hooks/claude/reply) && [ -n \"$reply\" ] && { printf '%s\\n' \"$reply\" >&2; exit 2; }; exit 0 \(marker)"
-    }
-
-    /// The reply hook on another Mac: `factory hook --reply` hands on the reply itself, and exits 2.
-    static func replyCommand(factory path: String) -> String {
-        "'\(path.replacingOccurrences(of: "'", with: "'\\''"))' hook --reply; [ $? -eq 2 ] && exit 2; exit 0 \(marker)"
-    }
-
     /// The PermissionRequest command that goes with one of our event commands.
     static func permissionCommand(like command: String) -> String {
         if let port = command.firstMatch(of: /127\.0\.0\.1:(\d+)\/api\/hooks\/claude/).flatMap({ UInt16($0.1) }) {
@@ -74,17 +57,6 @@ nonisolated enum ClaudeSetup {
         }
         if let quoted = command.firstMatch(of: /^'((?:[^']|'\\'')*)' hook/)?.1 {
             return permissionCommand(factory: String(quoted).replacingOccurrences(of: "'\\''", with: "'"))
-        }
-        return command
-    }
-
-    /// The reply command that goes with one of our event commands.
-    static func replyCommand(like command: String) -> String {
-        if let port = command.firstMatch(of: /127\.0\.0\.1:(\d+)\/api\/hooks\/claude/).flatMap({ UInt16($0.1) }) {
-            return replyCommand(port: port)
-        }
-        if let quoted = command.firstMatch(of: /^'((?:[^']|'\\'')*)' hook/)?.1 {
-            return replyCommand(factory: String(quoted).replacingOccurrences(of: "'\\''", with: "'"))
         }
         return command
     }
@@ -113,7 +85,8 @@ nonisolated enum ClaudeSetup {
     ]
 
     /// One of our entries in the settings: the event, its matcher, the handler's command and
-    /// timeout, and whether it runs in the background and can wake the session (`asyncRewake`).
+    /// timeout, and whether it runs in the background and can wake the session (`asyncRewake`, as an
+    /// earlier version's reply hook did, which installing again takes out).
     struct Entry: Hashable {
         var event: String
         var matcher: String?
@@ -129,7 +102,7 @@ nonisolated enum ClaudeSetup {
             event.name == "PermissionRequest"
                 ? Entry(event: event.name, matcher: event.matcher, command: permission, timeout: Int(permissionWait) + 60)
                 : Entry(event: event.name, matcher: event.matcher, command: command, timeout: 5)
-        } + [Entry(event: "Stop", command: replyCommand(like: command), timeout: Int(replyWait) + 60, rewake: true)]
+        }
     }
 
     /// The entries of ours in a settings file's hooks.

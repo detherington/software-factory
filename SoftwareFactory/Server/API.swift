@@ -16,9 +16,8 @@ import Foundation
 ///     POST   /api/todos                 adds one to the project a folder belongs to: {"path": "…", "text": "…"}
 ///     POST   /api/hooks/claude          a Claude Code hook's input, unchanged; a PermissionRequest waits
 ///                                       for an answer from the board, and gets Claude Code's decision
-///     POST   /api/hooks/claude/reply    the Stop hook that waits for a reply from the board, and gets it
 ///     POST   /api/permissions/{id}      answers a permission prompt: {"allow": true}
-///     POST   /api/sessions/{id}/reply   replies to a session whose turn ended: {"text": "…"}
+///     POST   /api/sessions/{id}/reply   answers a session's turn by carrying it on in a chat: {"text": "…"}
 ///     GET    /api/chats                 the sessions the board runs; /api/chats/{id}, one, with its lines
 ///     POST   /api/chats                 starts one: {"project": "…", "text": "…"}
 ///     POST   /api/chats/{id}            writes in one: {"text": "…"}, or stops its turn: {"interrupt": true}
@@ -151,16 +150,16 @@ enum API {
                 let project = store.applyClaudeHook(payload, machine: machine)
                 return .json(Data("{\"ok\":true,\"project\":\(project.map { "\"\($0.id)\"" } ?? "null")}".utf8))
             case ("POST", "api/hooks/claude/reply"):
-                guard let payload = try JSONSerialization.jsonObject(with: request.body) as? [String: Any],
-                      let sessionID = payload["session_id"] as? String else {
-                    return .error(400, "Send the Stop hook's JSON input as the body.")
-                }
-                return replyRequest(sessionID, store: store)
+                // An earlier version's reply hook, until its Mac installs the hooks again: nothing to wait for.
+                return .text("")
             case ("POST", "api/sessions/*/reply"):
                 let body = try JSONSerialization.jsonObject(with: request.body) as? [String: Any]
                 guard let text = (body?["text"] as? String)?.trimmed else { return .error(400, "Send the reply as {\"text\": \"…\"}.") }
-                let sent = store.reply(to: key, text: text, from: machine ?? String(localized: "this Mac"))
-                return .json(Data("{\"sent\":\(sent)}".utf8))
+                guard machine == nil else { return .error(403, "A reply starts a chat on the Mac that has the session.") }
+                guard let chat = store.continueInChat(key, saying: text, from: String(localized: "this Mac")) else {
+                    return .error(409, "That session can't be carried on here: it isn't on this Mac, or its folder is gone.")
+                }
+                return .json(Data("{\"chat\":\"\(chat)\"}".utf8))
             case ("POST", "api/permissions/*"):
                 let body = try JSONSerialization.jsonObject(with: request.body) as? [String: Any]
                 let reply: PermissionAsk.Reply
@@ -294,21 +293,6 @@ enum API {
         return response
     }
 
-    /// A turn's end: while the board can reply, the reply hook's request is held open until you do,
-    /// and the response is what wakes Claude with it; or nothing, to leave the session be.
-    private static func replyRequest(_ sessionID: String, store: ProjectStore) -> HTTPResponse {
-        let until = Date.now.addingTimeInterval(ClaudeSetup.replyWait)
-        // A session the board runs takes what you write as you: it needs no hook to wake it.
-        guard PermissionDesk.shared.isOn, !SessionHost.shared.isHosting(sessionID), store.replyOpened(sessionID, until: until) else { return .text("") }
-        var response = HTTPResponse.text("")
-        response.later = {
-            let message = await PermissionDesk.shared.reply(for: sessionID, until: until)
-            if message == nil { await store.replyLapsed(sessionID) }
-            return .text(message ?? "")
-        }
-        return response
-    }
-
     /// The sessions the board runs: listing, reading, starting, writing in and stopping them.
     private static func chat(_ request: HTTPRequest, key: String, store: ProjectStore) throws -> HTTPResponse {
         let host = SessionHost.shared
@@ -403,7 +387,7 @@ enum API {
         POST   /api/projects/{id}         a status report for that project (id, name or code)
         DELETE /api/projects/{id}         hide it from the board
         POST   /api/hooks/claude          a Claude Code hook's JSON input, unchanged
-        POST   /api/sessions/{id}/reply   reply to a session whose turn ended: {"text": "…"}
+        POST   /api/sessions/{id}/reply   answer a session's turn, carrying it on in a chat: {"text": "…"}
         GET    /api/factory              the factory command, for setting up another Mac
 
         Other Macs (Settings › Other Macs) send "Authorization: Bearer <token>" and

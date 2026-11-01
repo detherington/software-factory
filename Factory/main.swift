@@ -329,18 +329,8 @@ func run(_ args: Arguments) async throws {
         // prompt waits for the board's answer instead, and prints it for Claude Code.
         var input = FileHandle.standardInput.readDataToEndOfFile()
         let offline = URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "software-factory-offline")
-        // --reply: the Stop hook that runs in the background once a turn ends, waiting for a reply
-        // from the board. Exit 2, with the reply on stderr, wakes the session with it.
-        if args.flags.contains("reply") {
-            if let since = (try? offline.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate,
-               Date.now.timeIntervalSince(since) < 60 {
-                return
-            }
-            guard let reply = try? await request("POST", "api/hooks/claude/reply", body: input, url: url, timeout: ClaudeSetup.replyWait + 30),
-                  !reply.isEmpty else { return }
-            FileHandle.standardError.write(reply + Data("\n".utf8))
-            exit(2)
-        }
+        // --reply: an earlier version's reply hook, until this Mac installs the hooks again.
+        if args.flags.contains("reply") { return }
         let payload = (try? JSONSerialization.jsonObject(with: input)) as? [String: Any]
         let isPermission = payload?["hook_event_name"] as? String == "PermissionRequest"
         let remote = !["127.0.0.1", "localhost", "::1"].contains(url.host() ?? "")

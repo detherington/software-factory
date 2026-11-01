@@ -353,7 +353,8 @@ struct QuestionPrompt: View {
 }
 
 /// A reply to a turn that ended asking you something, from the board or the iPhone: one of Claude
-/// Desktop's next-step buttons, or your own words, which wake the session as your next message.
+/// Desktop's next-step buttons, or your own words, which carry the session on in a chat the board
+/// runs, as your first message there.
 struct ReplyPrompt: View {
     let session: Session
     var onFlood = false
@@ -407,9 +408,9 @@ extension Project {
         return nil
     }
 
-    /// The live session whose turn ended asking you something, while a reply can still reach it.
+    /// The live session whose turn ended asking you something, which a reply carries on in a chat.
     func openReply(at now: Date) -> Session? {
-        liveSessions(at: now).first { $0.state.needsYou && $0.ask != nil && $0.permission == nil && $0.canReply(at: now) }
+        liveSessions(at: now).first { $0.state.needsYou && $0.ask != nil && $0.permission == nil }
     }
 }
 

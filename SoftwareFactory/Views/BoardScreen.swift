@@ -91,6 +91,7 @@ struct LiveCard: View {
     let project: Project
     @Environment(ProjectStore.self) private var store
     @Environment(Navigator.self) private var navigator
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         let now = store.now
@@ -141,8 +142,8 @@ struct LiveCard: View {
                 }
                 .padding(.top, 4)
             } else if let reply {
-                ReplyPrompt(session: reply, onFlood: true, answerable: PermissionDesk.shared.canReply(to: reply.id), compact: true) { text in
-                    store.reply(to: reply.id, text: text, from: String(localized: "this Mac"))
+                ReplyPrompt(session: reply, onFlood: true, answerable: store.canContinue(reply), compact: true) { text in
+                    if let chat = store.continueInChat(reply.id, saying: text, from: String(localized: "this Mac")) { openWindow(id: "chat", value: chat) }
                 }
                 .padding(.top, 4)
             }

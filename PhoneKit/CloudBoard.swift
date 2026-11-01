@@ -206,6 +206,8 @@ nonisolated enum CloudBoard {
         /// new chat in `project` with the id the iPhone chose (`start`).
         var session: String?
         var text: String?
+        /// The chat a reply carries a session on in, with the id the iPhone chose.
+        var chat: String?
     }
 
     static func record(for change: Change) throws -> CKRecord {
