@@ -316,7 +316,7 @@ enum API {
         let body = request.body.isEmpty ? nil : try JSONSerialization.jsonObject(with: request.body) as? [String: Any]
         switch (request.method, key) {
         case ("GET", ""):
-            return try encode(host.chats.values.sorted { $0.updated > $1.updated }.map { chat in
+            return try encode(host.chats.values.filter(\.hasBegun).sorted { $0.updated > $1.updated }.map { chat in
                 var listed = chat
                 listed.items = []
                 return listed

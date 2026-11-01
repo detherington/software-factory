@@ -53,6 +53,9 @@ struct ChatItem: Codable, Hashable, Identifiable, Sendable {
 }
 
 extension HostedChat {
+    /// Whether anything was ever written in it.
+    var hasBegun: Bool { began != nil || !items.isEmpty }
+
     /// The latest of it, for the iPhone: iCloud takes a megabyte a record, so long words are cut.
     func phoneCopy(items count: Int = 60, characters: Int = 4000) -> HostedChat {
         var copy = self

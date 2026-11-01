@@ -234,7 +234,7 @@ final class PhoneShare {
         let now = Date.now
         let machine = ProjectStore.shared.machineName
         var payloads: [String: Data] = [:]
-        for chat in SessionHost.shared.chats.values where now.timeIntervalSince(chat.updated) < 7 * 86_400 {
+        for chat in SessionHost.shared.chats.values where chat.hasBegun && now.timeIntervalSince(chat.updated) < 7 * 86_400 {
             payloads[chat.id] = try? CloudBoard.encode(chat.phoneCopy())
         }
         let changed = payloads.filter { sentChats[$0.key] != $0.value }

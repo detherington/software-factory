@@ -62,8 +62,9 @@ final class SessionHost {
         chats.values.contains { $0.status.isBusy || $0.status == .waiting || now.timeIntervalSince($0.updated) < seconds && runs[$0.id] != nil }
     }
 
+    /// A project's chats that have begun: one opened and never written in isn't listed, kept or sent.
     func chats(for project: String) -> [HostedChat] {
-        chats.values.filter { $0.project == project }.sorted { $0.updated > $1.updated }
+        chats.values.filter { $0.project == project && $0.hasBegun }.sorted { $0.updated > $1.updated }
     }
 
     // MARK: - Starting
@@ -424,7 +425,7 @@ final class SessionHost {
     func saveNow() {
         guard loaded || !chats.isEmpty else { return }
         // The latest fifty chats, each with its latest four hundred lines.
-        let kept = chats.values.sorted { $0.updated > $1.updated }.prefix(50).map { chat in
+        let kept = chats.values.filter(\.hasBegun).sorted { $0.updated > $1.updated }.prefix(50).map { chat in
             var chat = chat
             chat.items = Array(chat.items.suffix(400))
             return chat

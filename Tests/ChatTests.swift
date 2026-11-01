@@ -183,11 +183,14 @@ struct ChatTests {
         let project = Project(id: "moth-radio", name: "Moth Radio", path: folder.path)
         let id = try #require(host.newChat(in: project))
         #expect(host.chats[id]?.status == .ended)
+        // Opened and not yet written in: not listed, kept or sent.
+        #expect(!host.chats(for: project.id).contains { $0.id == id })
 
         #expect(host.send("Run the tests", to: id))
         #expect(host.isHosting(id))
         #expect(await eventually { host.chats[id]?.ask != nil })
         let chat = try #require(host.chats[id])
+        #expect(host.chats(for: project.id).contains { $0.id == id })
         #expect(chat.title == "Run the tests")
         #expect(chat.model == "claude-test-1")
         #expect(chat.began != nil)
