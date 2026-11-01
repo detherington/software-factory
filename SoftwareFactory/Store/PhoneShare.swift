@@ -56,6 +56,8 @@ final class PhoneShare {
     @ObservationIgnored private var sentDigest: Data?
     /// The Passport last sent, without when it was read, which changes with every read.
     @ObservationIgnored private var sentPassport: Data?
+    /// The chats this Mac runs, as last sent, by id.
+    @ObservationIgnored private var sentChats: [String: Data] = [:]
     @ObservationIgnored private var state = Saved()
     @ObservationIgnored private var otherMacsInput: Date?
     @ObservationIgnored private var lastPresenceWrite = Date.distantPast
@@ -188,6 +190,7 @@ final class PhoneShare {
             status = .shared(.now, count: payloads.count)
             await sendDigest(to: database)
             await sendPassport(to: database)
+            await sendChats(to: database)
         } catch {
             log.error("Couldn't send the board: \(error.localizedDescription, privacy: .public)")
             status = .failed(Self.describe(error))
@@ -226,8 +229,35 @@ final class PhoneShare {
         }
     }
 
-    /// What iCloud has now, so a restart doesn't send every project again: the projects (the digest
-    /// and the Passport are records of their own, not ones to delete).
+    /// The chats this Mac runs, touched in the last week, with their latest lines; those older go.
+    private func sendChats(to database: CKDatabase) async {
+        let now = Date.now
+        let machine = ProjectStore.shared.machineName
+        var payloads: [String: Data] = [:]
+        for chat in SessionHost.shared.chats.values where now.timeIntervalSince(chat.updated) < 7 * 86_400 {
+            payloads[chat.id] = try? CloudBoard.encode(chat.phoneCopy())
+        }
+        let changed = payloads.filter { sentChats[$0.key] != $0.value }
+        // Only this Mac's own: another Mac's chats are its to send and to clear.
+        let gone = sentChats.keys.filter { payloads[$0] == nil }
+        guard !changed.isEmpty || !gone.isEmpty else { return }
+        do {
+            let records = changed.map { CloudBoard.chatRecord($0.value, for: $0.key) }
+            for batch in records.chunked(into: 50) {
+                _ = try await database.modifyRecords(saving: batch, deleting: [], savePolicy: .allKeys, atomically: false)
+            }
+            if !gone.isEmpty {
+                _ = try await database.modifyRecords(saving: [], deleting: gone.map(CloudBoard.chatRecordID(for:)), atomically: false)
+            }
+            for (id, data) in changed { sentChats[id] = data }
+            for id in gone { sentChats[id] = nil }
+        } catch {
+            log.error("Couldn't send \(machine, privacy: .public)'s chats: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// What iCloud has now, so a restart doesn't send every project again: the projects (the digest,
+    /// the Passport and chats are records of their own, not ones to delete).
     private func readSent(from database: CKDatabase) async throws -> [String: Data] {
         var found: [String: Data] = [:]
         for record in try await CloudBoard.allRecords(in: CloudBoard.zoneID, from: database) {
@@ -238,6 +268,9 @@ final class PhoneShare {
                 sentPassport = passport.flatMap { try? CloudBoard.encode($0) }
             } else if record.recordType == CloudBoard.digestType {
                 sentDigest = data
+            } else if record.recordID.recordName.hasPrefix(CloudBoard.chatPrefix) {
+                let id = String(record.recordID.recordName.dropFirst(CloudBoard.chatPrefix.count))
+                if CloudBoard.decode(HostedChat.self, from: data)?.machine == ProjectStore.shared.machineName { sentChats[id] = data }
             } else {
                 found[record.recordID.recordName] = data
             }
@@ -284,9 +317,19 @@ final class PhoneShare {
     func permissionAsked() {
         boardChanged(soon: true)
         if sendsAlerts, database != nil { Task { await sendAlerts() } }
+        readInboxOften()
+    }
+
+    /// A chat this Mac runs is under way, and you may write in it from the iPhone: read the inbox
+    /// every few seconds while it is, and for half an hour after.
+    func chatting() {
+        readInboxOften()
+    }
+
+    private func readInboxOften() {
         guard isOn, database != nil, quickInbox == nil else { return }
         quickInbox = Task { [weak self] in
-            while !Task.isCancelled, PermissionDesk.shared.isWaiting {
+            while !Task.isCancelled, PermissionDesk.shared.isWaiting || SessionHost.shared.isChatting(within: 30 * 60) {
                 try? await Task.sleep(for: .seconds(3))
                 await self?.readInbox()
             }
@@ -307,7 +350,7 @@ final class PhoneShare {
 
     /// Folds one change from the iPhone into the board, and says whether it's done with, so the inbox
     /// can let it go. A to-do for a project no Mac has heard of yet waits a day for one to.
-    static func fold(_ change: CloudBoard.Change, into store: ProjectStore, digests: DigestStore, now: Date = .now) -> Bool {
+    static func fold(_ change: CloudBoard.Change, into store: ProjectStore, digests: DigestStore, host: SessionHost = .shared, now: Date = .now) -> Bool {
         switch change.kind {
         case .todo:
             guard let todo = change.todo, let project = change.project else { return true }
@@ -328,7 +371,32 @@ final class PhoneShare {
             let known = store.local.values.contains { $0.sessions.contains { $0.id == session } }
             let sent = store.reply(to: session, text: text, from: String(localized: "the iPhone"))
             return sent || known || now.timeIntervalSince(change.answered ?? .distantPast) > ClaudeSetup.replyWait
+        case .message, .interrupt, .start:
+            return foldChat(change, into: store, host: host, now: now)
         }
+    }
+
+    /// What you did in a chat on the iPhone: the Mac that runs it carries it out. A new one starts on
+    /// a Mac that has the project's folder. One for another Mac waits a day for it.
+    static func foldChat(_ change: CloudBoard.Change, into store: ProjectStore, host: SessionHost, now: Date) -> Bool {
+        guard let id = change.session else { return true }
+        let stale = now.timeIntervalSince(change.answered ?? .distantPast) > 86_400
+        switch change.kind {
+        case .message:
+            guard host.chats[id] != nil, let text = change.text else { return stale }
+            host.send(text, to: id)
+        case .interrupt:
+            guard host.chats[id] != nil else { return stale }
+            host.interrupt(id)
+        default:
+            guard let text = change.text else { return true }
+            if host.chats[id] == nil {
+                guard let key = change.project, let project = store[store.projectID(matching: key, name: change.projectName ?? key, repo: nil)],
+                      host.newChat(in: project, id: id) != nil else { return stale }
+            }
+            host.send(text, to: id)
+        }
+        return true
     }
 
     // MARK: - For the digest

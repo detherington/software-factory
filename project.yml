@@ -124,6 +124,7 @@ targets:
       - path: PhoneWidgets/WidgetViews.swift
       - path: PhoneKit
       - path: SoftwareFactory/Model/Project.swift
+      - path: SoftwareFactory/Model/HostedChat.swift
       - path: SoftwareFactory/Model/Formats.swift
       - path: SoftwareFactory/Model/AppStoreStatus.swift
       - path: SoftwareFactory/Model/Digest.swift
@@ -131,6 +132,7 @@ targets:
       - path: SoftwareFactory/Model/TranscriptTally.swift
       - path: SoftwareFactory/Design/Theme.swift
       - path: SoftwareFactory/Design/Components.swift
+      - path: SoftwareFactory/Design/ChatViews.swift
       - path: Shared/JSONDates.swift
     dependencies:
       - target: SoftwareFactoryPhoneWidgets
@@ -192,6 +194,7 @@ targets:
       - path: PhoneWidgets
       - path: PhoneKit
       - path: SoftwareFactory/Model/Project.swift
+      - path: SoftwareFactory/Model/HostedChat.swift
       - path: SoftwareFactory/Model/Formats.swift
       - path: SoftwareFactory/Model/AppStoreStatus.swift
       - path: SoftwareFactory/Model/Digest.swift

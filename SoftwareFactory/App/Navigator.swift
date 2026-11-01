@@ -20,6 +20,8 @@ final class Navigator {
     /// Opens the board window, from outside SwiftUI (a notification). The menu bar icon, which is
     /// always there, provides it.
     @ObservationIgnored var openBoard: (() -> Void)?
+    /// Opens a chat the board runs in its window, by id: set by a view that can open windows.
+    @ObservationIgnored var openChat: ((String) -> Void)?
 
     func open(_ id: String) {
         selection = .project(id)

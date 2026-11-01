@@ -91,6 +91,9 @@ struct ProjectView: View {
                 }
             }
 
+            SectionLabel(String(localized: "Chats"), trailing: board.chats(for: project.id).isEmpty ? nil : "\(board.chats(for: project.id).count)")
+            ProjectChats(project: project, now: now)
+
             let todos = project.openTodos
             SectionLabel(String(localized: "To do"), trailing: todos.isEmpty ? nil : "\(todos.count)")
             TodoList(project: project, todos: todos)

@@ -37,6 +37,7 @@ A status board for every coding project on this Mac: what's being worked on, wha
 
   Clicking one opens the session's Claude Desktop chat when it has one, and the board otherwise; **Open Chat** and **Show on Board** do the same from the notification. Notifications are grouped by project, several arriving together come as one, and a "needs you" leaves Notification Center once it's answered. Sessions on other Macs notify too, labeled with the Mac (switch that off in Settings). Only what happened in the last two minutes notifies, so opening the app, or a synced board catching up, doesn't replay old news.
 - **TestFlight and the App Store.** With an App Store Connect API key, each app's card shows its latest build and App Store version: "1.0 · In testing", "1.0 · Waiting for review", "1.1 · On the App Store". Its project page lists recent builds for each platform, and what testers sent: crashes and screenshots, each opening its crash log or screenshots. A crash since the newest build shows on the card as "1 crash". A build that fails processing or a rejected version turns the card Blocked, and a version going live counts as Shipped. See [App Store Connect](#app-store-connect).
+- **Chats.** Start a Claude Code session from a project's page, or carry on one from Claude Desktop or Terminal, and talk to it in a window of its own, or from the iPhone. What you write reaches Claude as your own words. See [Chats](#chats).
 - **On your iPhone.** The Factory app shows the board, with widgets for the Home Screen and Lock Screen, and alerts you when something needs you while you're away from your Macs. See [iPhone](#iphone).
 - **Menu bar and Dock.** A raised hand and a count in the menu bar when something needs you; a bolt while work is under way. The Dock icon shows how many projects need you.
 - **One board on all your Macs.** Run Software Factory on each Mac and turn on Settings › Sync. Each board shares its projects through iCloud Drive and shows the others' with its own, labeled with each Mac's name.
@@ -195,6 +196,22 @@ Each ends when its `<task-notification>` arrives with a final status (`completed
 `factory uninstall-hooks` takes them out again.
 
 To have Claude report milestones, steps and blockers too, run `factory instructions --install`. It puts a status-board section in `~/.claude/CLAUDE.md`, between `<!-- software-factory -->` markers, so running it again replaces the section instead of adding another, and the rest of the file stays as it is. On a connected Mac, the section names the board's address and that Mac's name. `factory instructions` on its own prints the section, as does Settings › Copy CLAUDE.md Section here, for pasting into a project's CLAUDE.md.
+
+## Chats
+
+Software Factory can run Claude Code sessions itself, so you can talk to them from the board and the iPhone. Each one is `claude -p` in the project's folder, speaking stream-json over its standard input and output, as Claude Desktop's chats do:
+
+```bash
+claude -p --input-format stream-json --output-format stream-json --verbose --replay-user-messages --permission-prompt-tool stdio --setting-sources user,project,local --session-id <id>
+```
+
+- **Starting one.** **New Chat** (the bubble at the top of a project's page) opens a chat window; the first thing you write starts the session, with your usual settings, hooks and permission mode. Its id is the board's choice, so its hooks report to the board under the same id, and the session shows on the project's card like any other.
+- **Carrying one on.** Right-click a session on a project's page and choose **Continue in Software Factory**. That forks it (`--resume <id> --fork-session --session-id <new id>`): the conversation so far comes along, read from its transcript, and the session it came from stays as it was, so it's safe while Claude Desktop still has it open.
+- **Talking to it.** Write while it works and Claude reads it next; **Stop** (or Escape) stops the turn, as Escape does in Claude Code. The window shows what you wrote, Claude's words (Markdown, with code in boxes), each tool call with its command or file, and where each turn ended.
+- **Permission prompts and questions** come over its stdio (`can_use_tool`) and go to the same desk as a hook's: **Allow** and **Deny** in the chat window, on the project's card, in the Mac's notification and on the iPhone, and Claude's questions with their options. The answer goes back as a `control_response`, with a question's answers in the tool's input. The `PermissionRequest` and reply hooks step aside for these sessions.
+- **When it stops.** A session left alone for two hours lets its process go; so does quitting the app. Writing again starts it where it was (`--resume`). The latest fifty chats are kept in the data folder's `Chats.json`, each with its latest four hundred lines.
+- **On the iPhone.** A project's page lists its chats, with **New chat with Claude Code**. A chat shows the conversation as the Mac last sent it, refreshed every few seconds while it's open, with its prompts and a box to write in. What you write, a stop or a new chat goes to the Mac through the iCloud inbox, which the Mac reads every three seconds while a chat is under way or has been in the last half hour (otherwise within thirty seconds). The Mac sends each chat it ran in the last week, with its latest sixty lines, as a Project record named `chat.<id>`, as the Passport travels, so the iCloud schema doesn't change. A new chat from the iPhone starts on a Mac that has the project's folder, with Software Factory open.
+- **Signing in.** Chats run the `claude` command from `~/.local/bin`, `~/.npm-global/bin`, `/opt/homebrew/bin` or `/usr/local/bin` (or `defaults write com.darrell.softwarefactory FactoryClaudePath <path>`), which needs to be signed in on its own: run `claude auth login` in Terminal once. A chat that finds it signed out says so.
 
 ## Sync between Macs
 
@@ -362,6 +379,9 @@ The API listens on `127.0.0.1:7720`, and only on this Mac unless Other Macs is o
 | POST | `/api/todos` | Adds one to the project a folder belongs to: `{"path": "…", "text": "…"}` (or `"project"`) |
 | POST | `/api/hooks/claude` | A Claude Code hook's input, unchanged. For a `PermissionRequest` it can answer, the board holds the request until it does and responds with Claude Code's decision (or nothing) |
 | POST | `/api/hooks/claude/reply` | The `Stop` hook that waits for a reply: the board holds it while you can reply, and responds with what wakes Claude (or nothing) |
+| GET | `/api/chats` | The sessions the board runs, newest first, without their lines; `/api/chats/{id}`, one with its lines. From this Mac only |
+| POST | `/api/chats` | Starts one in a project: `{"project": "moth-radio", "text": "Add a sleep timer"}` (the project by id, name or code) |
+| POST | `/api/chats/{id}` | Writes in one, as you: `{"text": "…"}`; or stops its turn: `{"interrupt": true}` |
 | POST | `/api/sessions/{id}/reply` | Replies to a session whose turn ended, as your next message: `{"text": "…"}`. Says whether its hook was waiting: `{"sent": true}` |
 | POST | `/api/permissions/{id}` | Answers a permission prompt: `{"allow": true}` or `{"allow": false}`; or a question: `{"answers": {"<question>": "<label>"}}`. Says whether a hook was waiting: `{"answered": true}` |
 | GET | `/api/prompts` | Saved prompts: `project` is a project's id, or missing for every project |
@@ -413,7 +433,7 @@ The reply is the project as the board shows it: `state` and `label` ("Needs you"
 
 ## Data
 
-The board lives in `~/Library/Application Support/Software Factory/projects.json`, the Passport's record in `passport.json`, saved prompts in `prompts.json` the digest's last send and snoozes in `digest.json` and the alerts sent to the iPhone in `phone.json` beside it. TestFlight crash logs, once fetched, are in `Crash Logs/`. Each project keeps its last 200 events and up to 12 sessions. Sessions nobody has heard from in three days are dropped.
+The board lives in `~/Library/Application Support/Software Factory/projects.json`, the Passport's record in `passport.json`, saved prompts in `prompts.json` the digest's last send and snoozes in `digest.json` and the alerts sent to the iPhone in `phone.json` beside it. TestFlight crash logs, once fetched, are in `Crash Logs/`, and the chats the board runs in `Chats.json`. Each project keeps its last 200 events and up to 12 sessions. Sessions nobody has heard from in three days are dropped.
 
 ## Development
 

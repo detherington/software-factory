@@ -40,6 +40,10 @@ enum Snapshot {
             render(PassportContent(period: .constant(period)).padding(28), width: 1240, name: "passport-\(period.rawValue).png")
         }
         render(MenuBarContent { _ in }, width: 380, name: "menu.png")
+        // The latest chat the board runs, its conversation laid out in full.
+        if let chat = SessionHost.shared.chats.values.max(by: { $0.updated < $1.updated }) {
+            render(VStack(alignment: .leading) { ChatTranscript(chat: chat) }.padding(24).frame(width: 760), width: 760, name: "chat.png")
+        }
         return written
     }
 }

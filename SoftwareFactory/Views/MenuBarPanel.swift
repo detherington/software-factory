@@ -8,7 +8,10 @@ struct MenuBarLabel: View {
     var body: some View {
         label
             // Always on screen, so it's how a notification opens the board window.
-            .onAppear { Navigator.shared.openBoard = { openWindow(id: "board") } }
+            .onAppear {
+                Navigator.shared.openBoard = { openWindow(id: "board") }
+                Navigator.shared.openChat = { openWindow(id: "chat", value: $0) }
+            }
     }
 
     @ViewBuilder

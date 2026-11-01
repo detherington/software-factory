@@ -88,7 +88,7 @@ nonisolated enum CloudBoard {
         return record
     }
 
-    typealias Board = (projects: [Project], digest: Digest?, passport: Passport?)
+    typealias Board = (projects: [Project], digest: Digest?, passport: Passport?, chats: [HostedChat])
 
     /// Every project in the zone, today's digest and the Passport. There are a few dozen records, so
     /// it reads them all each time.
@@ -100,17 +100,20 @@ nonisolated enum CloudBoard {
         var projects: [Project] = []
         var digest: Digest?
         var passport: Passport?
+        var chats: [HostedChat] = []
         for record in records {
             guard let data = record[Field.data] as? Data else { continue }
             if record.recordID.recordName == passportRecordName {
                 passport = decode(Passport.self, from: data)
+            } else if record.recordID.recordName.hasPrefix(chatPrefix) {
+                if let chat = decode(HostedChat.self, from: data) { chats.append(chat) }
             } else if record.recordType == digestType {
                 digest = decode(Digest.self, from: data)
             } else if let project = decode(Project.self, from: data) {
                 projects.append(project)
             }
         }
-        return (projects, digest, passport)
+        return (projects, digest, passport, chats)
     }
 
     static func fetchProjects(from database: CKDatabase) async throws -> [Project] {
@@ -128,6 +131,23 @@ nonisolated enum CloudBoard {
             more = changes.moreComing
         }
         return records
+    }
+
+    // MARK: - Chats
+
+    /// A chat a Mac runs (`HostedChat`), its latest lines, as a Project record named for it, as the
+    /// Passport's is: the schema needs nothing new, and iPhone builds from before pass over it.
+    static let chatPrefix = "chat."
+
+    static func chatRecord(_ data: Data, for id: String) -> CKRecord {
+        let record = CKRecord(recordType: projectType, recordID: chatRecordID(for: id))
+        record[Field.data] = data
+        record[Field.updated] = Date.now
+        return record
+    }
+
+    static func chatRecordID(for id: String) -> CKRecord.ID {
+        CKRecord.ID(recordName: chatPrefix + id, zoneID: zoneID)
     }
 
     // MARK: - The digest
@@ -164,7 +184,7 @@ nonisolated enum CloudBoard {
 
     /// Something changed on the iPhone, for the Macs to fold in.
     struct Change: Codable, Sendable {
-        enum Kind: String, Codable, Sendable { case todo, snooze, permission, reply }
+        enum Kind: String, Codable, Sendable { case todo, snooze, permission, reply, message, interrupt, start }
 
         var kind: Kind
         /// The project, as the board the iPhone saw names it, and its name, to find it on any Mac.
@@ -182,6 +202,8 @@ nonisolated enum CloudBoard {
         var answered: Date?
         var answers: [String: String]?
         /// A reply to a session whose turn ended: the session, and what you said (sent `answered`).
+        /// Also what you wrote in a chat a Mac runs (`message`), stopping its turn (`interrupt`), or a
+        /// new chat in `project` with the id the iPhone chose (`start`).
         var session: String?
         var text: String?
     }

@@ -23,6 +23,12 @@ final class PhoneBoard {
     private(set) var answeredPermissions: [String: Bool] = [:]
     /// Replies sent from here, by session, and when: until a Mac passes one on, its card says so.
     private(set) var replied: [String: Date] = [:]
+    /// The chats your Macs run, by id, with what you wrote in them here that hasn't come back yet.
+    private(set) var chats: [String: HostedChat] = [:]
+    @ObservationIgnored private var fetchedChats: [String: HostedChat] = [:]
+    /// Chats started here that no Mac has picked up yet, and lines written here not yet in a fetched chat.
+    @ObservationIgnored private var startedChats: [String: HostedChat] = [:]
+    @ObservationIgnored private var writtenLines: [String: [ChatItem]] = [:]
     private(set) var isRefreshing = false
     /// Ticks so relative times and stale sessions move on.
     private(set) var now = Date.now
@@ -112,6 +118,8 @@ final class PhoneBoard {
         do {
             let board = try await CloudBoard.fetchBoard(from: database)
             projects = board.projects
+            fetchedChats = Dictionary(board.chats.map { ($0.id, $0) }) { first, second in first.updated > second.updated ? first : second }
+            applyWrittenLines()
             digest = board.digest
             passport = board.passport ?? passport
             fetched = .now
@@ -202,6 +210,56 @@ final class PhoneBoard {
         let categories = await center.notificationCategories()
         let kept = categories.filter { !$0.identifier.hasPrefix("reply.") || replying.contains(String($0.identifier.dropFirst("reply.".count))) }
         if kept.count < categories.count { center.setNotificationCategories(kept) }
+    }
+
+    // MARK: - Chats
+
+    func chats(for project: String) -> [HostedChat] {
+        chats.values.filter { $0.project == project }.sorted { $0.updated > $1.updated }
+    }
+
+    /// Writes in a chat a Mac runs: it shows here at once, and the Mac passes it to Claude as yours.
+    func write(_ text: String, in chat: HostedChat) {
+        writtenLines[chat.id, default: []].append(ChatItem(id: "here-\(UUID().uuidString)", kind: .user, text: text, date: .now))
+        applyWrittenLines()
+        send(CloudBoard.Change(kind: .message, project: chat.project, answered: .now, session: chat.id, text: text))
+    }
+
+    /// Stops the turn under way, on the Mac.
+    func interrupt(_ chat: HostedChat) {
+        send(CloudBoard.Change(kind: .interrupt, project: chat.project, answered: .now, session: chat.id))
+    }
+
+    /// A new chat in a project, which a Mac with its folder starts. Returns its id.
+    func startChat(in project: Project, text: String) -> String {
+        let id = UUID().uuidString.lowercased()
+        let line = ChatItem(id: "here-\(UUID().uuidString)", kind: .user, text: text, date: .now)
+        startedChats[id] = HostedChat(id: id, project: project.id, title: text.split(separator: "\n").first.map(String.init), items: [line],
+                                      status: .starting, updated: .now)
+        applyWrittenLines()
+        send(CloudBoard.Change(kind: .start, project: project.id, projectName: project.name, answered: .now, session: id, text: text))
+        return id
+    }
+
+    /// The fetched chats, with what was written here and hasn't come back from a Mac yet. A line is
+    /// back once the chat has what you wrote, from about when you wrote it; a chat, once a Mac sends it.
+    private func applyWrittenLines() {
+        var merged = fetchedChats
+        startedChats = startedChats.filter { fetchedChats[$0.key] == nil && Date.now.timeIntervalSince($0.value.updated) < 86_400 }
+        for (id, chat) in startedChats { merged[id] = chat }
+        for (id, lines) in writtenLines {
+            guard var chat = merged[id] else { continue }
+            let waiting = lines.filter { line in
+                !chat.items.contains { $0.kind == .user && $0.text == line.text && $0.date > line.date.addingTimeInterval(-60) }
+                    && Date.now.timeIntervalSince(line.date) < 86_400
+            }
+            writtenLines[id] = waiting.isEmpty ? nil : waiting
+            guard !waiting.isEmpty else { continue }
+            chat.items += waiting
+            if !chat.status.isBusy, chat.status != .waiting { chat.status = .working }
+            merged[id] = chat
+        }
+        chats = merged
     }
 
     /// Hides a nudge from Today, here and on the Macs, for a day or a week.

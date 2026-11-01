@@ -15,6 +15,16 @@ struct SoftwareFactoryApp: App {
         .defaultSize(width: 1320, height: 900)
         .commands { FactoryCommands() }
 
+        // A Claude Code session the board runs, by its id.
+        WindowGroup("Chat", id: "chat", for: String.self) { $id in
+            if let id {
+                ChatScreen(id: id)
+                    .frame(minWidth: 520, minHeight: 460)
+                    .factoryEnvironment()
+            }
+        }
+        .defaultSize(width: 760, height: 820)
+
         MenuBarExtra {
             MenuBarPanel()
                 .factoryEnvironment()
@@ -43,6 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             MainActor.assumeIsolated {
                 ProjectStore.shared.saveNow()
                 ProjectStore.shared.writeSyncNow()
+                SessionHost.shared.stopAll()
             }
             exit(0)
         }
@@ -59,6 +70,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         PromptStore.shared.start()
         DigestStore.shared.start()
         PhoneShare.shared.start()
+        SessionHost.shared.load()
         PaletteController.shared.updateHotKey()
         // A new version may listen to more hook events: bring the hooks this app installed up to date.
         _ = try? ClaudeSetup.upgradeIfNeeded()
@@ -77,6 +89,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         ProjectStore.shared.saveNow()
         ProjectStore.shared.writeSyncNow()
+        SessionHost.shared.stopAll()
     }
 }
 

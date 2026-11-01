@@ -424,6 +424,12 @@ final class Notifier {
             return
         }
         let session = store[id]?.sessions.first { $0.id == sessionID }
+        // A session the board runs opens its chat window.
+        if action != "show-board", SessionHost.shared.chats[sessionID] != nil, let open = Navigator.shared.openChat {
+            open(sessionID)
+            NSApplication.shared.activate()
+            return
+        }
         if action != "show-board", let session, let chat = store.chat(for: session) {
             Reveal.chat(chat)
             return

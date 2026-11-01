@@ -27,6 +27,7 @@ struct ProjectContent: View {
     /// Snapshots draw the latest entries only: a whole timeline is too tall for one image.
     var timelineLimit = Int.max
     @Environment(ProjectStore.self) private var store
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         let now = store.now
@@ -35,6 +36,11 @@ struct ProjectContent: View {
         VStack(alignment: .leading, spacing: 16) {
             ScreenHeader(label: [project.code, project.displayPath].compactMap { $0 }.joined(separator: " · "), title: project.name) {
                 HStack(spacing: 8) {
+                    if project.path != nil, project.isOnThisMac {
+                        GlassIconButton(systemImage: "plus.bubble", accessibilityLabel: String(localized: "New Chat with Claude Code")) {
+                            if let id = SessionHost.shared.newChat(in: project) { openWindow(id: "chat", value: id) }
+                        }
+                    }
                     if let chat = store.bestChat(for: project) {
                         GlassIconButton(systemImage: "bubble.left.and.text.bubble.right",
                                         accessibilityLabel: String(localized: "Open “\(chat.title ?? project.name)” in Claude")) { Reveal.chat(chat) }
@@ -67,6 +73,10 @@ struct ProjectContent: View {
                 }
                 if !project.sessions.isEmpty {
                     SessionsCard(project: project, now: now)
+                }
+                let hosted = SessionHost.shared.chats(for: project.id).filter { chat in !project.sessions.contains { $0.id == chat.id } }
+                if !hosted.isEmpty {
+                    HostedChatsCard(chats: Array(hosted.prefix(5)), now: now)
                 }
                 if project.looseEnds?.contains(where: { $0.worktree != nil }) == true {
                     WorktreesCard(project: project, now: now)
@@ -248,25 +258,41 @@ private struct SessionsCard: View {
     let project: Project
     let now: Date
     @Environment(ProjectStore.self) private var store
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         let live = Set(project.liveSessions(at: now).map(\.id))
         Card(padding: 20) {
             TrackedLabel(String(localized: "Sessions"), size: 11, color: Switchyard.textTertiary)
             ForEach(project.sessions.sorted { $0.updated > $1.updated }) { session in
-                // A Claude Desktop session opens its chat; a Terminal or other Mac's session is just a row.
-                if let chat = store.chat(for: session) {
-                    Button { Reveal.chat(chat) } label: { row(session, chat: chat, live: live) }
-                        .buttonStyle(.plain)
-                        .help(String(localized: "Open this chat in Claude"))
-                } else {
-                    row(session, chat: nil, live: live)
+                // One the board runs opens its chat here; a Claude Desktop session opens its chat in
+                // Claude; a Terminal or other Mac's session is just a row.
+                Group {
+                    if SessionHost.shared.chats[session.id] != nil {
+                        Button { openWindow(id: "chat", value: session.id) } label: { row(session, chat: nil, live: live, hosted: true) }
+                            .buttonStyle(.plain)
+                            .help(String(localized: "Open this chat"))
+                    } else if let chat = store.chat(for: session) {
+                        Button { Reveal.chat(chat) } label: { row(session, chat: chat, live: live) }
+                            .buttonStyle(.plain)
+                            .help(String(localized: "Open this chat in Claude"))
+                    } else {
+                        row(session, chat: nil, live: live)
+                    }
+                }
+                .contextMenu {
+                    // Carrying it on here forks it, so it's safe while it runs elsewhere.
+                    if session.machine == nil, session.transcript != nil, SessionHost.shared.chats[session.id] == nil {
+                        Button("Continue in Software Factory") {
+                            if let id = SessionHost.shared.continueSession(session, in: project) { openWindow(id: "chat", value: id) }
+                        }
+                    }
                 }
             }
         }
     }
 
-    private func row(_ session: Session, chat: DesktopChats.Chat?, live: Set<String>) -> some View {
+    private func row(_ session: Session, chat: DesktopChats.Chat?, live: Set<String>, hosted: Bool = false) -> some View {
         let state = live.contains(session.id) ? session.state : .idle
         return HStack(alignment: .top, spacing: 12) {
             SymbolTile(symbol: state.symbol, swatch: state.swatch, size: 34)
@@ -301,10 +327,10 @@ private struct SessionsCard: View {
                 TrackedLabel(state == .working ? (session.mode?.label ?? state.label) : state.label,
                              size: 9, color: state == .idle ? Switchyard.textTertiary : state.swatch.color)
             }
-            if chat != nil {
-                Image(systemName: "arrow.up.forward")
+            if chat != nil || hosted {
+                Image(systemName: hosted ? "bubble.left.and.text.bubble.right" : "arrow.up.forward")
                     .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(Switchyard.textTertiary)
+                    .foregroundStyle(hosted ? Swatch.violet.color : Switchyard.textTertiary)
                     .padding(.top, 4)
             }
         }
@@ -482,6 +508,39 @@ private struct AppStoreCard: View {
 }
 
 /// The project's other Claude Desktop chats, to pick one up again.
+/// Chats the board ran in the project that its sessions list no longer shows.
+private struct HostedChatsCard: View {
+    let chats: [HostedChat]
+    let now: Date
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Card(padding: 20) {
+            TrackedLabel(String(localized: "Chats here"), size: 11, color: Switchyard.textTertiary)
+            ForEach(chats) { chat in
+                Button { openWindow(id: "chat", value: chat.id) } label: {
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Image(systemName: "bubble.left.and.text.bubble.right")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(chat.status.swatch.color)
+                            .frame(width: 18)
+                        Text(chat.title ?? String(localized: "New chat"))
+                            .font(.headline(16, weight: .semibold))
+                            .foregroundStyle(Switchyard.text)
+                            .lineLimit(1)
+                        Spacer(minLength: 8)
+                        Text(Formats.ago(chat.updated, from: now)).font(.display(18, weight: .heavy)).foregroundStyle(Switchyard.textTertiary)
+                    }
+                    .padding(.vertical, 3)
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .help(String(localized: "Open this chat"))
+            }
+        }
+    }
+}
+
 private struct ChatsCard: View {
     let chats: [DesktopChats.Chat]
     let now: Date

@@ -19,6 +19,9 @@ import Foundation
 ///     POST   /api/hooks/claude/reply    the Stop hook that waits for a reply from the board, and gets it
 ///     POST   /api/permissions/{id}      answers a permission prompt: {"allow": true}
 ///     POST   /api/sessions/{id}/reply   replies to a session whose turn ended: {"text": "…"}
+///     GET    /api/chats                 the sessions the board runs; /api/chats/{id}, one, with its lines
+///     POST   /api/chats                 starts one: {"project": "…", "text": "…"}
+///     POST   /api/chats/{id}            writes in one: {"text": "…"}, or stops its turn: {"interrupt": true}
 ///     GET    /api/factory               the factory command, for setting up another Mac
 ///
 /// From this Mac, anything goes. Other Macs (with Settings › Other Macs on) send the token as
@@ -54,10 +57,11 @@ enum API {
         let isProject = parts.count >= 3 && parts[0] == "api" && parts[1] == "projects"
         let isPermission = parts.count == 3 && parts[0] == "api" && parts[1] == "permissions"
         let isSession = parts.count == 4 && parts[0] == "api" && parts[1] == "sessions"
+        let isChat = parts.count == 3 && parts[0] == "api" && parts[1] == "chats"
         let route = isProject
             ? (["api", "projects", "*"] + parts.dropFirst(3).enumerated().map { $0.offset == 1 ? "*" : $0.element }).joined(separator: "/")
-            : isPermission ? "api/permissions/*" : isSession ? "api/sessions/*/" + parts[3] : parts.joined(separator: "/")
-        let key = isProject || isPermission || isSession ? parts[2] : ""
+            : isPermission ? "api/permissions/*" : isSession ? "api/sessions/*/" + parts[3] : isChat ? "api/chats/*" : parts.joined(separator: "/")
+        let key = isProject || isPermission || isSession || isChat ? parts[2] : ""
         let todoKey = parts.count == 5 ? parts[4] : ""
         do {
             switch (request.method, route) {
@@ -169,6 +173,10 @@ enum API {
                 }
                 let answered = store.answerPermission(key, reply: reply, from: machine ?? String(localized: "this Mac"))
                 return .json(Data("{\"answered\":\(answered)}".utf8))
+            case (_, "api/chats"), (_, "api/chats/*"):
+                // Sessions run on this Mac, so only from this Mac.
+                guard machine == nil else { return .error(403, "Chats are run from the Mac that has them.") }
+                return try chat(request, key: key, store: store)
             case ("GET", "api/prompts"):
                 // Saved prompts: those for every project, and each project's own.
                 return try encode(PromptStore.shared.all.filter { !$0.deleted })
@@ -262,6 +270,8 @@ enum API {
     /// A permission prompt: the board shows it and, when it can answer it, holds the hook's request
     /// open until it has. The response is Claude Code's decision, or nothing, to leave it to Claude.
     private static func permissionRequest(_ payload: [String: Any], entrypoint header: String?, store: ProjectStore, machine: String?) -> HTTPResponse {
+        // A session the board runs asks over its own stdio, which the board answers: the hook stays out of it.
+        if let sessionID = payload["session_id"] as? String, SessionHost.shared.isHosting(sessionID) { return .text("") }
         // Claude Code's entry point, from the curl hook's header or another Mac's factory command.
         let entrypoint = payload["factory_entrypoint"] as? String ?? header.flatMap(\.trimmed)
         let wait = PermissionDesk.shared.wait(tool: payload["tool_name"] as? String ?? "", entrypoint: entrypoint)
@@ -288,7 +298,8 @@ enum API {
     /// and the response is what wakes Claude with it; or nothing, to leave the session be.
     private static func replyRequest(_ sessionID: String, store: ProjectStore) -> HTTPResponse {
         let until = Date.now.addingTimeInterval(ClaudeSetup.replyWait)
-        guard PermissionDesk.shared.isOn, store.replyOpened(sessionID, until: until) else { return .text("") }
+        // A session the board runs takes what you write as you: it needs no hook to wake it.
+        guard PermissionDesk.shared.isOn, !SessionHost.shared.isHosting(sessionID), store.replyOpened(sessionID, until: until) else { return .text("") }
         var response = HTTPResponse.text("")
         response.later = {
             let message = await PermissionDesk.shared.reply(for: sessionID, until: until)
@@ -296,6 +307,43 @@ enum API {
             return .text(message ?? "")
         }
         return response
+    }
+
+    /// The sessions the board runs: listing, reading, starting, writing in and stopping them.
+    private static func chat(_ request: HTTPRequest, key: String, store: ProjectStore) throws -> HTTPResponse {
+        let host = SessionHost.shared
+        host.load()
+        let body = request.body.isEmpty ? nil : try JSONSerialization.jsonObject(with: request.body) as? [String: Any]
+        switch (request.method, key) {
+        case ("GET", ""):
+            return try encode(host.chats.values.sorted { $0.updated > $1.updated }.map { chat in
+                var listed = chat
+                listed.items = []
+                return listed
+            })
+        case ("POST", ""):
+            guard let project = (body?["project"] as? String).flatMap({ store.find($0) }) else {
+                return .error(400, "Send the project, by id, name or code, and what to write: {\"project\": \"…\", \"text\": \"…\"}.")
+            }
+            guard let id = host.newChat(in: project) else { return .error(409, "\(project.name)'s folder isn't on this Mac.") }
+            if let text = body?["text"] as? String { host.send(text, to: id) }
+            return try encode(host.chats[id])
+        case ("GET", _):
+            guard let chat = host.chats[key] else { return .error(404, "No chat \(key). GET /api/chats lists them.") }
+            return try encode(chat)
+        case ("POST", _):
+            guard host.chats[key] != nil else { return .error(404, "No chat \(key). GET /api/chats lists them.") }
+            if body?["interrupt"] as? Bool == true {
+                host.interrupt(key)
+            } else if let text = body?["text"] as? String {
+                guard host.send(text, to: key) else { return .error(409, host.chats[key]?.problem ?? "It couldn't start.") }
+            } else {
+                return .error(400, "Send {\"text\": \"…\"} or {\"interrupt\": true}.")
+            }
+            return try encode(host.chats[key])
+        default:
+            return .error(405, "\(request.method) isn't supported here.")
+        }
     }
 
     private static func isLocal(host: String?) -> Bool {
