@@ -5,6 +5,7 @@ struct TodoCard: View {
     let project: Project
     @Environment(ProjectStore.self) private var store
     @Environment(Navigator.self) private var navigator
+    @Environment(\.openWindow) private var openWindow
     @State private var draft = ""
     @State private var editing: UUID?
     @State private var editText = ""
@@ -93,13 +94,21 @@ struct TodoCard: View {
                     .onTapGesture(count: 2) { startEditing(todo) }
             }
 
+            // The chat started from it, in its state's color.
+            if let id = todo.chat, let chat = SessionHost.shared.chats[id] {
+                Button { openWindow(id: "chat", value: id) } label: {
+                    Image(systemName: "bubble.left.and.text.bubble.right.fill").foregroundStyle(chat.status.swatch.color)
+                }
+                .buttonStyle(.plain)
+                .help(String(localized: "Open its chat: \(chat.status.label)"))
+            }
             if hovered == todo.id, editing != todo.id {
-                if !todo.done, let path = project.path, project.isOnThisMac {
-                    Button { Reveal.newChat(in: path, prompt: todo.text) } label: {
+                if !todo.done, todo.chat == nil, project.path != nil, project.isOnThisMac {
+                    Button { startChat(todo) } label: {
                         Image(systemName: "bubble.left.and.text.bubble.right")
                     }
                     .buttonStyle(.plain)
-                    .help(String(localized: "Start in Claude"))
+                    .help(String(localized: "Start a chat with Claude Code about it"))
                 }
                 Button { store.deleteTodo(todo.id, in: project.id) } label: { Image(systemName: "xmark") }
                     .buttonStyle(.plain)
@@ -113,13 +122,26 @@ struct TodoCard: View {
         .onHover { inside in hovered = inside ? todo.id : (hovered == todo.id ? nil : hovered) }
         .contextMenu {
             if !todo.done, let path = project.path, project.isOnThisMac {
-                Button("Start in Claude", systemImage: "bubble.left.and.text.bubble.right") { Reveal.newChat(in: path, prompt: todo.text) }
+                Button("Start a Chat", systemImage: "bubble.left.and.text.bubble.right") { startChat(todo) }
+                Button("Start in Claude Desktop", systemImage: "arrow.up.forward.app") { Reveal.newChat(in: path, prompt: todo.text) }
+            }
+            if let id = todo.chat, SessionHost.shared.chats[id] != nil {
+                Button("Open Its Chat", systemImage: "bubble.left.and.text.bubble.right.fill") { openWindow(id: "chat", value: id) }
             }
             Button("Edit", systemImage: "pencil") { startEditing(todo) }
             Button("Copy", systemImage: "doc.on.doc") { Reveal.copy(todo.text) }
             Divider()
             Button("Delete", systemImage: "trash", role: .destructive) { store.deleteTodo(todo.id, in: project.id) }
         }
+    }
+
+    /// A chat with Claude Code about the to-do, which the board runs: it starts with the to-do, and
+    /// the to-do remembers it.
+    private func startChat(_ todo: Todo) {
+        guard let id = SessionHost.shared.newChat(in: project) else { return }
+        SessionHost.shared.send(todo.chatPrompt, to: id)
+        store.linkTodo(todo.id, in: project.id, chat: id)
+        openWindow(id: "chat", value: id)
     }
 
     private func add() {

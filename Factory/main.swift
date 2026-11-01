@@ -15,7 +15,7 @@ Report (for the project in the current folder, or --project):
   factory note "Moved sync to CKSyncEngine"            a line in the timeline
   factory todo "Rename the export button"              adds to your to-do list for the project
   factory todos                                        lists it, numbered
-  factory todo done 2                                  ticks off number 2
+  factory todo done 2                                  ticks off number 2 (or one by its id)
   factory progress 40 [--milestone "TestFlight 0.3"]
   factory steps --done "Design" --active "Build" --todo "Test" "Ship"
   factory advance                                      the step under way is done; start the next
@@ -278,9 +278,10 @@ func run(_ args: Arguments) async throws {
     case "advance", "next":
         try await report(args, ["advance": true], url: url)
     case "todo":
-        if args.words.first == "done", args.words.count == 2, let number = Int(args.words[1]) {
+        // By its number in the list, or its id (as a chat started from it is told).
+        if args.words.first == "done", args.words.count == 2, Int(args.words[1]) != nil || UUID(uuidString: args.words[1]) != nil {
             let project = try await projectID(args, url: url)
-            let data = try await request("PATCH", "api/projects/\(project)/todos/\(number)", body: JSONSerialization.data(withJSONObject: ["done": true]), url: url)
+            let data = try await request("PATCH", "api/projects/\(project)/todos/\(args.words[1])", body: JSONSerialization.data(withJSONObject: ["done": true]), url: url)
             let todo = try decoder.decode(TodoReply.self, from: data)
             if !args.flags.contains("quiet") { print("Done: \(todo.text)") }
             return

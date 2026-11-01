@@ -13,7 +13,7 @@ A status board for every coding project on this Mac: what's being worked on, wha
 
   It works by reading the file Claude Desktop keeps for each Code chat, in `~/Library/Application Support/Claude/claude-code-sessions`, to match a session's ID to its chat. It opens the chat with `claude://code/continue?session=local_…`. Terminal sessions and other Macs' sessions have no chat to open here.
 - **To-dos.** Each project has your own to-do list, apart from Claude's plans, for things you notice or think of to tackle there:
-  - **Project page:** a To do card. Type and press Return to add; click the circle to tick one off; double-click to edit. On hover, **Start in Claude** opens a new Claude Desktop session in that folder with the to-do in its message box (`claude://code/new?folder=…&q=…`, not sent).
+  - **Project page:** a To do card. Type and press Return to add; click the circle to tick one off; double-click to edit. On hover, the chat button starts a [chat](#chats) about it with Claude Code, which Software Factory runs: it opens in its own window, begins with the to-do, and tells Claude to tick it off with `factory todo done <id>` once it's done. The to-do then shows its chat, in the chat's state color, and opens it. Right-click for **Start in Claude Desktop** instead, which opens a new Claude Desktop session in that folder with the to-do in its message box (`claude://code/new?folder=…&q=…`, not sent).
   - **Board:** cards show "3 to do", and the sidebar shows the count.
   - **Quick capture:** "Add To-Do…" in any card's menu, the field in the menu bar panel, or `factory todo "…"` in Terminal. That includes Claude, when you ask it to note something.
   - **Sync:** the list syncs between Macs. The latest change to each item wins, and deletions are kept 30 days so they reach every Mac.
@@ -206,6 +206,7 @@ claude -p --input-format stream-json --output-format stream-json --verbose --rep
 ```
 
 - **Starting one.** **New Chat** (the bubble at the top of a project's page) opens a chat window; the first thing you write starts the session, with your usual settings, hooks and permission mode. Its id is the board's choice, so its hooks report to the board under the same id, and the session shows on the project's card like any other.
+- **From a to-do.** A to-do's chat button, on the Mac or the iPhone (press and hold), starts a chat that begins with the to-do and how to tick it off (`factory todo done <id>`), so Claude ticks it off when it's done. The to-do remembers its chat.
 - **Carrying one on.** Right-click a session on a project's page and choose **Continue in Software Factory**. That forks it (`--resume <id> --fork-session --session-id <new id>`): the conversation so far comes along, read from its transcript, and the session it came from stays as it was, so it's safe while Claude Desktop still has it open.
 - **Talking to it.** Write while it works and Claude reads it next; **Stop** (or Escape) stops the turn, as Escape does in Claude Code. The window shows what you wrote, Claude's words (Markdown, with code in boxes), each tool call with its command or file, and where each turn ended.
 - **Permission prompts and questions** come over its stdio (`can_use_tool`) and go to the same desk as a hook's: **Allow** and **Deny** in the chat window, on the project's card, in the Mac's notification and on the iPhone, and Claude's questions with their options. The answer goes back as a `control_response`, with a question's answers in the tool's input. The `PermissionRequest` and reply hooks step aside for these sessions.
@@ -312,7 +313,7 @@ The iPhone app, Factory, shows the board your Macs keep, Today, and the Passport
 - **Reply.** A turn that ended asking you something shows the next-step box's buttons on its card. Its page adds a box for your own words. Your Mac wakes the session with the reply. See [Replies](#replies).
 - **Allow or deny.** A permission prompt the board can answer shows what Claude asks to run, write or fetch, with **Allow** and **Deny**, on its card and its page. Your Mac passes the answer to Claude within a few seconds; until then the prompt says it's on its way. See [Permission prompts](#permission-prompts).
 - **Answer in Claude.** When a chat in Claude Desktop has Remote Control on, whatever it asks you (a question, a permission, your call, a block) gets an *Answer in Claude* button: on its card, on its page and in Today. It opens the chat in the Claude app, where you answer it and the Mac carries on. Working sessions get *Open in Claude*, to follow along. The board reads each chat's Remote Control session from Claude Desktop's file for it (`bridgeSessionIds`, newest last; none once you turn Remote Control off) whenever a turn ends, and it travels with the session to the iPhone and to your other Macs. Turn Remote Control on for a chat with the Remote Control switch in its toolbar, or for every new chat with Claude Desktop's *Connect new sessions to Remote Control* setting. Sessions in Terminal don't get the button.
-- **To-dos.** Add one on a project's page, tick one off, or press and hold to delete it. Your Macs pick up the change within about half a minute, and it shows on the phone at once.
+- **To-dos.** Add one on a project's page, tick one off, or press and hold to delete it or start a chat about it, which a Mac with the project's folder runs. A to-do with a chat shows it; tap to open it. Your Macs pick up the change within about half a minute, and it shows on the phone at once.
 - **Today.** The same as on the Mac: the days since the last digest in numbers, then what's waiting on you, loose ends and old to-dos. Tick old to-dos off, or snooze any item for a day or a week, on every Mac.
 - **Passport.** This week, last week or the last 30 days, as on the Mac: the hours, sessions, commits, builds, releases and tokens, each day's hours, the projects and the stamps. A Mac adds up every Mac's numbers (with Sync on) and sends them with the board when they change. Tap a project or a stamp to open its project.
 - **Widgets.** *Board* (small, medium, large): what needs you, what's working and the latest of the rest. *Needs You* (Lock Screen): how many projects need you, and which. Tap a project to open it.
@@ -339,7 +340,7 @@ factory idle
 factory note "Moved sync to CKSyncEngine"
 factory todo "Rename the export button"   # your to-do list for the project
 factory todos                       # lists it, numbered
-factory todo done 2                 # ticks off number 2
+factory todo done 2                 # ticks off number 2, or one by its id
 factory progress 40 --milestone "TestFlight 0.3"
 factory steps --done "Design" --active "Build" --todo "Test" "Ship"
 factory advance                     # the step under way is done; start the next

@@ -194,6 +194,8 @@ struct Todo: Codable, Identifiable, Hashable, Sendable {
     /// Deleted: kept for a while so the deletion reaches the other Macs instead of their copies
     /// bringing it back.
     var deleted = false
+    /// The chat started from it, which the board runs (`HostedChat`).
+    var chat: String?
 
     /// Whether this copy wins over another of the same to-do: the later change, and on a tie the
     /// same pick on every Mac (a deletion, then a tick, then the text).
@@ -202,6 +204,12 @@ struct Todo: Codable, Identifiable, Hashable, Sendable {
         if deleted != other.deleted { return deleted }
         if done != other.done { return done }
         return text > other.text
+    }
+
+    /// What a chat started from it is told, in your words: the to-do, and how to tick it off once
+    /// it's done, which the board then shows.
+    var chatPrompt: String {
+        text + "\n\n" + "(This is from my to-do list for the project in Software Factory. When it's done, tick it off with `factory todo done \(id.uuidString)`.)"
     }
 }
 

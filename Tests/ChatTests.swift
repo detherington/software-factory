@@ -258,6 +258,38 @@ struct ChatTests {
         #expect(host.chats[start.session ?? ""] == nil)
     }
 
+    // MARK: - From a to-do
+
+    /// A chat started from a to-do begins with it, says how to tick it off, and the to-do remembers it,
+    /// including as the iPhone's copy comes back.
+    @Test func aToDoStartsAChatThatCanTickItOff() throws {
+        let store = TestBoard.make()
+        _ = store.hook("UserPromptSubmit", UUID().uuidString, ["prompt": "Ship it"])
+        let todo = try #require(store.addTodo("Add a sleep timer", to: TestBoard.projectID))
+        #expect(todo.chatPrompt.hasPrefix("Add a sleep timer\n\n"))
+        #expect(todo.chatPrompt.contains("`factory todo done \(todo.id.uuidString)`"))
+        #expect(HookText.task(from: todo.chatPrompt) == "Add a sleep timer")
+
+        store.linkTodo(todo.id, in: TestBoard.projectID, chat: "c1")
+        let linked = try #require(store[TestBoard.projectID]?.todos?.first { $0.id == todo.id })
+        #expect(linked.chat == "c1")
+        #expect(linked.updated >= todo.updated)
+
+        // The iPhone ticks it off, with the link it had.
+        var ticked = linked
+        ticked.done = true
+        ticked.updated = linked.updated.addingTimeInterval(1)
+        #expect(store.mergeTodo(ticked, into: TestBoard.projectID))
+        #expect(store[TestBoard.projectID]?.todos?.first { $0.id == todo.id }?.chat == "c1")
+
+        // Ticked off by its id, as the chat is told to.
+        let other = try #require(store.addTodo("Fix the thumb", to: TestBoard.projectID))
+        let request = HTTPRequest(method: "PATCH", path: "api/projects/\(TestBoard.projectID)/todos/\(other.id.uuidString)", query: [:],
+                                  headers: ["host": "127.0.0.1:7720"], body: Data(#"{"done": true}"#.utf8))
+        _ = API.handle(request, store: store)
+        #expect(store[TestBoard.projectID]?.todos?.first { $0.id == other.id }?.done == true)
+    }
+
     @Test func noClaudeSaysSo() throws {
         var arguments = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
         arguments["FactoryClaudePath"] = "/nowhere/claude"

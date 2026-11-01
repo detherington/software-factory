@@ -241,6 +241,17 @@ final class PhoneBoard {
         return id
     }
 
+    /// A chat about a to-do, which a Mac with the project's folder starts: it begins with the to-do,
+    /// and the to-do remembers it, on your Macs too. Returns its id.
+    func startChat(from todo: Todo, in project: Project) -> String {
+        let id = startChat(in: project, text: todo.chatPrompt)
+        var linked = todo
+        linked.chat = id
+        linked.updated = .now
+        change(linked, in: project)
+        return id
+    }
+
     /// The fetched chats, with what was written here and hasn't come back from a Mac yet. A line is
     /// back once the chat has what you wrote, from about when you wrote it; a chat, once a Mac sends it.
     private func applyWrittenLines() {

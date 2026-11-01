@@ -136,13 +136,14 @@ struct ProjectView: View {
     }
 }
 
-/// Your to-dos for a project: add one, tick one off, or delete one (press and hold). Your Macs pick
-/// up the change within moments.
+/// Your to-dos for a project: add one, tick one off, delete one or start a chat about it (press and
+/// hold). Your Macs pick up the change within moments.
 private struct TodoList: View {
     let project: Project
     let todos: [Todo]
     @Environment(PhoneBoard.self) private var board
     @State private var draft = ""
+    @State private var openedChat: String?
     @FocusState private var adding: Bool
 
     var body: some View {
@@ -174,15 +175,31 @@ private struct TodoList: View {
                         .font(.headline(16, weight: .medium))
                         .foregroundStyle(Switchyard.text)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                    // The chat started from it, in its state's color.
+                    if let id = todo.chat {
+                        Button { openedChat = id } label: {
+                            Image(systemName: "bubble.left.and.text.bubble.right.fill")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle((board.chats[id]?.status.swatch ?? .slate).color)
+                                .frame(width: 28, height: 24)
+                                .contentShape(.rect)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(String(localized: "Open its chat"))
+                    }
                 }
                 .padding(.vertical, 2)
                 .contextMenu {
+                    if todo.chat == nil {
+                        Button("Start a Chat", systemImage: "bubble.left.and.text.bubble.right") { openedChat = board.startChat(from: todo, in: project) }
+                    }
                     Button("Done", systemImage: "checkmark") { board.setTodo(todo, done: true, in: project) }
                     Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = todo.text }
                     Button("Delete", systemImage: "trash", role: .destructive) { board.deleteTodo(todo, in: project) }
                 }
             }
         }
+        .navigationDestination(item: $openedChat) { ChatView(project: project.id, id: $0) }
     }
 
     private func add() {

@@ -402,6 +402,11 @@ final class ProjectStore {
         return true
     }
 
+    /// Remembers the chat started from a to-do.
+    func linkTodo(_ todoID: UUID, in id: String, chat: String) {
+        editTodo(todoID, in: id) { todo, _ in todo.chat = chat }
+    }
+
     func deleteTodo(_ todoID: UUID, in id: String) {
         editTodo(todoID, in: id) { todo, _ in todo.deleted = true }
     }
