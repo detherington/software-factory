@@ -20,7 +20,8 @@ import Foundation
 ///     POST   /api/sessions/{id}/reply   answers a session's turn by carrying it on in a chat: {"text": "…"}
 ///     GET    /api/chats                 the sessions the board runs; /api/chats/{id}, one, with its lines
 ///     POST   /api/chats                 starts one: {"project": "…", "text": "…"}
-///     POST   /api/chats/{id}            writes in one: {"text": "…"}, or stops its turn: {"interrupt": true}
+///     POST   /api/chats/{id}            writes in one: {"text": "…"}; stops its turn: {"interrupt": true}; or
+///                                       sets its permission mode: {"mode": "default" | "acceptEdits" | "auto" | "bypassPermissions"}
 ///     GET    /api/factory               the factory command, for setting up another Mac
 ///
 /// From this Mac, anything goes. Other Macs (with Settings › Other Macs on) send the token as
@@ -317,12 +318,15 @@ enum API {
             return try encode(chat)
         case ("POST", _):
             guard host.chats[key] != nil else { return .error(404, "No chat \(key). GET /api/chats lists them.") }
+            if let mode = (body?["mode"] as? String).flatMap(ChatMode.init(rawValue:)) { host.setMode(mode, for: key) }
             if body?["interrupt"] as? Bool == true {
                 host.interrupt(key)
+            } else if body?["mode"] != nil, body?["text"] == nil {
+                // Only the mode.
             } else if let text = body?["text"] as? String {
                 guard host.send(text, to: key) else { return .error(409, host.chats[key]?.problem ?? "It couldn't start.") }
             } else {
-                return .error(400, "Send {\"text\": \"…\"} or {\"interrupt\": true}.")
+                return .error(400, "Send {\"text\": \"…\"}, {\"interrupt\": true} or {\"mode\": \"auto\"}.")
             }
             return try encode(host.chats[key])
         default:

@@ -158,6 +158,8 @@ struct ChatTests {
                 out({"type": "user", "uuid": "you-" + text, "message": {"role": "user", "content": text}})
                 out({"type": "assistant", "uuid": "a1", "message": {"id": "m1", "content": [{"type": "text", "text": "Running the tests."}]}})
                 out({"type": "control_request", "request_id": "perm-1", "request": {"subtype": "can_use_tool", "tool_name": "Bash", "input": {"command": "make test"}, "tool_use_id": "t1"}})
+            elif m.get("type") == "control_request" and m["request"].get("subtype") == "set_permission_mode":
+                out({"type": "assistant", "uuid": "mode-" + m["request"]["mode"], "message": {"id": "m9", "content": [{"type": "text", "text": "Mode: " + m["request"]["mode"]}]}})
             elif m.get("type") == "control_response":
                 decision = m["response"]["response"]
                 if decision["behavior"] == "allow":
@@ -331,6 +333,47 @@ struct ChatTests {
         if let ask = host.chats[chat]?.ask { desk.settle(ask.id, with: PermissionDesk.Answer(allow: false, from: "this Mac")) }
         host.stop(chat)
         #expect(await eventually { !host.isHosting(chat) })
+    }
+
+    // MARK: - Permissions
+
+    /// A chat starts in the mode Settings says (Auto unless changed), with skipping permissions allowed
+    /// so it can switch to it; switching reaches a running session at once, and the next start.
+    @Test func aChatsModeSwitchesWhileItRuns() async throws {
+        var chat = HostedChat(id: "c1", project: "p", items: [], status: .ended, updated: .now)
+        #expect(ChatMode.preferred == .auto)
+        #expect(SessionHost.arguments(for: chat).contains("--allow-dangerously-skip-permissions"))
+        #expect(Array(SessionHost.arguments(for: chat).drop { $0 != "--permission-mode" }.prefix(2)) == ["--permission-mode", "auto"])
+        chat.mode = .skip
+        #expect(Array(SessionHost.arguments(for: chat).drop { $0 != "--permission-mode" }.prefix(2)) == ["--permission-mode", "bypassPermissions"])
+        let line = try #require(JSONSerialization.jsonObject(with: StreamJSON.setMode(.acceptEdits)) as? [String: Any])
+        #expect((line["request"] as? [String: Any])?["mode"] as? String == "acceptEdits")
+
+        var arguments = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
+        arguments["FactoryClaudePath"] = try stub().path
+        UserDefaults.standard.setVolatileDomain(arguments, forName: UserDefaults.argumentDomain)
+        defer {
+            arguments["FactoryClaudePath"] = nil
+            UserDefaults.standard.setVolatileDomain(arguments, forName: UserDefaults.argumentDomain)
+        }
+        let folder = TestBoard.folder.appending(path: "Moth Radio \(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let id = try #require(host.newChat(in: Project(id: "moth-radio", name: "Moth Radio", path: folder.path)))
+        #expect(host.chats[id]?.mode == .auto)
+        #expect(host.send("Run the tests", to: id))
+        #expect(await eventually { host.chats[id]?.ask != nil })
+        host.setMode(.skip, for: id)
+        #expect(host.chats[id]?.mode == .skip)
+        #expect(await eventually { host.chats[id]?.items.contains { $0.text == "Mode: bypassPermissions" } == true })
+
+        // From the iPhone.
+        let change = CloudBoard.Change(kind: .mode, project: "moth-radio", answered: .now, session: id, text: ChatMode.ask.rawValue)
+        #expect(PhoneShare.fold(change, into: TestBoard.make(), digests: DigestStore.shared, host: host))
+        #expect(host.chats[id]?.mode == .ask)
+
+        if let ask = host.chats[id]?.ask { desk.settle(ask.id, with: PermissionDesk.Answer(allow: false, from: "this Mac")) }
+        host.stop(id)
+        #expect(await eventually { !host.isHosting(id) })
     }
 
     @Test func noClaudeSaysSo() throws {

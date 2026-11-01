@@ -29,6 +29,8 @@ final class PhoneBoard {
     /// Chats started here that no Mac has picked up yet, and lines written here not yet in a fetched chat.
     @ObservationIgnored private var startedChats: [String: HostedChat] = [:]
     @ObservationIgnored private var writtenLines: [String: [ChatItem]] = [:]
+    /// Permission modes chosen here that the fetched chat doesn't have yet.
+    @ObservationIgnored private var chosenModes: [String: (mode: ChatMode, at: Date)] = [:]
     private(set) var isRefreshing = false
     /// Ticks so relative times and stale sessions move on.
     private(set) var now = Date.now
@@ -232,6 +234,13 @@ final class PhoneBoard {
         send(CloudBoard.Change(kind: .message, project: chat.project, answered: .now, session: chat.id, text: text))
     }
 
+    /// How much the chat asks before acting: the Mac switches it, even mid-turn.
+    func setMode(_ mode: ChatMode, in chat: HostedChat) {
+        chosenModes[chat.id] = (mode, .now)
+        applyWrittenLines()
+        send(CloudBoard.Change(kind: .mode, project: chat.project, answered: .now, session: chat.id, text: mode.rawValue))
+    }
+
     /// Stops the turn under way, on the Mac.
     func interrupt(_ chat: HostedChat) {
         send(CloudBoard.Change(kind: .interrupt, project: chat.project, answered: .now, session: chat.id))
@@ -277,6 +286,8 @@ final class PhoneBoard {
             if !chat.status.isBusy, chat.status != .waiting { chat.status = .working }
             merged[id] = chat
         }
+        chosenModes = chosenModes.filter { id, chosen in fetchedChats[id]?.mode != chosen.mode && Date.now.timeIntervalSince(chosen.at) < 3600 }
+        for (id, chosen) in chosenModes { merged[id]?.mode = chosen.mode }
         chats = merged
     }
 

@@ -62,7 +62,10 @@ struct ChatView: View {
         .toolbar {
             if let chat {
                 ToolbarItem(placement: .topBarTrailing) {
-                    StatusChip(text: chat.status.label, swatch: chat.status.swatch)
+                    HStack(spacing: 6) {
+                        ChatModeMenu(mode: chat.mode ?? .auto) { board.setMode($0, in: chat) }
+                        StatusChip(text: chat.status.label, swatch: chat.status.swatch)
+                    }
                 }
             }
         }

@@ -184,7 +184,7 @@ nonisolated enum CloudBoard {
 
     /// Something changed on the iPhone, for the Macs to fold in.
     struct Change: Codable, Sendable {
-        enum Kind: String, Codable, Sendable { case todo, snooze, permission, reply, message, interrupt, start }
+        enum Kind: String, Codable, Sendable { case todo, snooze, permission, reply, message, interrupt, start, mode }
 
         var kind: Kind
         /// The project, as the board the iPhone saw names it, and its name, to find it on any Mac.
@@ -202,8 +202,8 @@ nonisolated enum CloudBoard {
         var answered: Date?
         var answers: [String: String]?
         /// A reply to a session whose turn ended: the session, and what you said (sent `answered`).
-        /// Also what you wrote in a chat a Mac runs (`message`), stopping its turn (`interrupt`), or a
-        /// new chat in `project` with the id the iPhone chose (`start`).
+        /// Also what you wrote in a chat a Mac runs (`message`), stopping its turn (`interrupt`), a new
+        /// chat in `project` with the id the iPhone chose (`start`), or its permission mode (`mode`, in `text`).
         var session: String?
         var text: String?
         /// The chat a reply carries a session on in, with the id the iPhone chose.

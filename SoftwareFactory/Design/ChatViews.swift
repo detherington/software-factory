@@ -123,6 +123,29 @@ struct MarkdownText: View {
     }
 }
 
+/// How much a chat asks before acting, as a chip that's a menu: Skip Permissions shows in ember.
+struct ChatModeMenu: View {
+    let mode: ChatMode
+    let choose: (ChatMode) -> Void
+
+    var body: some View {
+        Menu {
+            Picker(String(localized: "Permissions"), selection: Binding(get: { mode }, set: choose)) {
+                ForEach(ChatMode.allCases) { mode in
+                    Label(mode.label, systemImage: mode.symbol).tag(mode)
+                }
+            }
+            .pickerStyle(.inline)
+            Text(mode.detail)
+        } label: {
+            StatusChip(text: mode.label, swatch: mode.swatch, symbol: mode.symbol, prominent: mode == .skip)
+        }
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .accessibilityLabel(String(localized: "Permissions: \(mode.label)"))
+    }
+}
+
 extension HostedChat.Status {
     /// Its state's color and words, as the board's: violet at work, amber waiting on you, ember failed.
     var swatch: Swatch {

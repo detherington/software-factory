@@ -113,6 +113,11 @@ enum StreamJSON {
         return line(["type": "control_response", "response": ["subtype": "success", "request_id": request, "response": decision]])
     }
 
+    /// Changes how much the session asks before acting, from its next tool call on.
+    static func setMode(_ mode: ChatMode, request: String = UUID().uuidString) -> Data {
+        line(["type": "control_request", "request_id": request, "request": ["subtype": "set_permission_mode", "mode": mode.rawValue]])
+    }
+
     /// Stops the turn under way.
     static func interrupt(_ request: String = UUID().uuidString) -> Data {
         line(["type": "control_request", "request_id": request, "request": ["subtype": "interrupt"]])

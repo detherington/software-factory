@@ -75,7 +75,7 @@ final class SessionHost {
         guard let folder = project.path, project.isOnThisMac else { return nil }
         load()
         chats[id] = HostedChat(id: id, project: project.id, items: [], status: .ended, updated: .now, folder: folder,
-                               machine: ProjectStore.shared.machineName)
+                               mode: ChatMode.preferred, machine: ProjectStore.shared.machineName)
         changed(id)
         return id
     }
@@ -88,7 +88,7 @@ final class SessionHost {
         guard let folder = history.folder ?? project.path, FileManager.default.fileExists(atPath: folder) else { return nil }
         load()
         chats[id] = HostedChat(id: id, project: project.id, title: session.task, items: history.items, status: .ended, updated: .now,
-                               folder: folder, continues: session.id, machine: ProjectStore.shared.machineName)
+                               folder: folder, continues: session.id, mode: ChatMode.preferred, machine: ProjectStore.shared.machineName)
         changed(id)
         return id
     }
@@ -115,6 +115,16 @@ final class SessionHost {
         changed(id)
         PhoneShare.shared.chatting()
         return true
+    }
+
+    /// How much the chat asks before acting: at once if it's running, and when it starts again.
+    func setMode(_ mode: ChatMode, for id: String) {
+        guard var chat = chats[id], chat.mode != mode else { return }
+        chat.mode = mode
+        chat.updated = .now
+        chats[id] = chat
+        runs[id]?.write(StreamJSON.setMode(mode))
+        changed(id, soon: true)
     }
 
     /// Stops the turn under way, as Escape does in Claude Code.
@@ -190,8 +200,10 @@ final class SessionHost {
     nonisolated static func arguments(for chat: HostedChat) -> [String] {
         let session = chat.began != nil ? ["--resume", chat.id]
             : chat.continues.map { ["--resume", $0, "--fork-session", "--session-id", chat.id] } ?? ["--session-id", chat.id]
+        // Skipping permissions is allowed, so the mode can switch to it while the session runs.
         return ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--replay-user-messages",
-                "--permission-prompt-tool", "stdio", "--setting-sources", "user,project,local"] + session
+                "--permission-prompt-tool", "stdio", "--setting-sources", "user,project,local",
+                "--allow-dangerously-skip-permissions", "--permission-mode", (chat.mode ?? .preferred).rawValue] + session
     }
 
     // MARK: - Hearing back

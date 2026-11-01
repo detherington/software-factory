@@ -18,6 +18,8 @@ struct HostedChat: Codable, Hashable, Identifiable, Sendable {
     var continues: String?
     /// When its session first started: after that, starting it again resumes it.
     var began: Date?
+    /// How much it asks before acting; nil for the default (`ChatMode.preferred`).
+    var mode: ChatMode?
     /// A tool call waiting for your permission, or a question waiting for your answer.
     var ask: PermissionAsk?
     /// Why it stopped, when it failed: "Not logged in · Please run /login".
@@ -34,6 +36,55 @@ struct HostedChat: Codable, Hashable, Identifiable, Sendable {
         case ended, failed
 
         var isBusy: Bool { self == .starting || self == .working }
+    }
+}
+
+/// How much a chat asks before it acts: Claude Code's permission mode.
+enum ChatMode: String, Codable, CaseIterable, Identifiable, Sendable {
+    /// Asks before running commands or changing files.
+    case ask = "default"
+    /// Changes files without asking; asks before running commands.
+    case acceptEdits
+    /// Claude Code decides what's safe to do without asking, as Claude Desktop's chats do.
+    case auto
+    /// Asks nothing (`bypassPermissions`, as `--dangerously-skip-permissions` does).
+    case skip = "bypassPermissions"
+
+    var id: Self { self }
+
+    var label: String {
+        switch self {
+        case .ask: String(localized: "Ask First")
+        case .acceptEdits: String(localized: "Accept Edits")
+        case .auto: String(localized: "Auto")
+        case .skip: String(localized: "Skip Permissions")
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .ask: String(localized: "Asks before running commands or changing files.")
+        case .acceptEdits: String(localized: "Changes files without asking; asks before running commands.")
+        case .auto: String(localized: "Claude Code decides what's safe to do without asking, as in Claude Desktop.")
+        case .skip: String(localized: "Asks nothing: runs any command and changes any file. Use with care.")
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .ask: "hand.raised"
+        case .acceptEdits: "pencil.and.list.clipboard"
+        case .auto: "wand.and.sparkles"
+        case .skip: "exclamationmark.shield.fill"
+        }
+    }
+
+    /// Ember when it asks nothing.
+    var swatch: Swatch { self == .skip ? .ember : .slate }
+
+    /// What new chats start in: Settings › Claude Code, Auto unless changed.
+    static var preferred: ChatMode {
+        UserDefaults.standard.string(forKey: "FactoryChatMode").flatMap(ChatMode.init(rawValue:)) ?? .auto
     }
 }
 

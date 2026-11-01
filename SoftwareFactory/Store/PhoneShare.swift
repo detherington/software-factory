@@ -372,7 +372,7 @@ final class PhoneShare {
             let known = store.local.values.contains { $0.sessions.contains { $0.id == session && $0.machine == nil } }
             let carried = store.continueInChat(session, saying: text, from: String(localized: "the iPhone"), chat: change.chat) != nil
             return carried || known || now.timeIntervalSince(change.answered ?? .distantPast) > 86_400
-        case .message, .interrupt, .start:
+        case .message, .interrupt, .start, .mode:
             return foldChat(change, into: store, host: host, now: now)
         }
     }
@@ -389,6 +389,9 @@ final class PhoneShare {
         case .interrupt:
             guard host.chats[id] != nil else { return stale }
             host.interrupt(id)
+        case .mode:
+            guard host.chats[id] != nil else { return stale }
+            if let mode = change.text.flatMap(ChatMode.init(rawValue:)) { host.setMode(mode, for: id) }
         default:
             guard let text = change.text else { return true }
             if host.chats[id] == nil {

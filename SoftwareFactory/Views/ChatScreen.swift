@@ -78,6 +78,7 @@ struct ChatScreen: View {
             if let model = chat.model {
                 CodeChip(text: model.replacingOccurrences(of: "claude-", with: ""), symbol: "cpu")
             }
+            ChatModeMenu(mode: chat.mode ?? .preferred) { host.setMode($0, for: id) }
             StatusChip(text: chat.status.label, swatch: chat.status.swatch, prominent: chat.status != .idle && chat.status != .ended)
             if host.isHosting(id) {
                 Menu {
