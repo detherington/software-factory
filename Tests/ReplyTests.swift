@@ -57,6 +57,39 @@ struct ReplyTests {
         #expect(API.handle(request, store: store).status == 409)
     }
 
+    /// Two sessions asking at once, as Volt Crystal's did: each question says which session it's from,
+    /// and one you won't answer can be dismissed, here or from the iPhone.
+    @Test func aQuestionSaysWhichSessionAndCanBeDismissed() throws {
+        endTurn()
+        let other = UUID().uuidString
+        store.hook("UserPromptSubmit", other, ["prompt": "Rig the fighter's guard pose"])
+        store.hook("PostToolUse", other, ["tool_name": "mcp__ccd_turn__wrap_up", "tool_input": ["ask": "Fix his guard pose next?"] as [String: Any]])
+        store.hook("Stop", other)
+        // It runs in a worktree, as its hooks' folder would say.
+        store.update(TestBoard.projectID) { p in
+            guard let index = p.sessions.firstIndex(where: { $0.id == other }) else { return }
+            p.sessions[index].worktree = "awesome-lumiere-fa9e40"
+        }
+        let project = try #require(store[TestBoard.projectID])
+        let guardPose = try #require(project.sessions.first { $0.id == other })
+        #expect(project.askLabel(for: guardPose, at: .now) == "awesome-lumiere-fa9e40 · Rig the fighter's guard pose")
+        #expect(project.askLabel(for: try #require(store.session(id)), at: .now) == "Main folder · Rig the glove for the fighter")
+
+        store.dismissAsk(other, from: "this Mac")
+        #expect(store.session(other)?.ask == nil)
+        #expect(store.session(other)?.state == .idle)
+        #expect(store[TestBoard.projectID]?.events.first?.title == "Dismissed on this Mac")
+        #expect(store[TestBoard.projectID]?.events.first?.detail == "Fix his guard pose next?")
+        // With one session asking, no label.
+        #expect(store[TestBoard.projectID]?.openReply(at: .now)?.id == id)
+
+        // From the iPhone.
+        let change = CloudBoard.Change(kind: .dismiss, project: TestBoard.projectID, answered: .now, session: id)
+        #expect(PhoneShare.fold(change, into: store, digests: DigestStore.shared))
+        #expect(store.session(id)?.ask == nil)
+        #expect(store[TestBoard.projectID]?.openReply(at: .now) == nil)
+    }
+
     // MARK: - Notifications
 
     @Test func aNotificationsButtonsSayTheReplies() {

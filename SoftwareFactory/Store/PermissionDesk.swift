@@ -159,6 +159,26 @@ extension ProjectStore {
         return answered
     }
 
+    /// Clears a turn's question you won't answer here, from "this Mac" or "the iPhone": the card stops
+    /// asking. The session itself still waits in Claude for whatever you write there.
+    func dismissAsk(_ sessionID: String, from: String) {
+        guard let project = local.values.first(where: { $0.sessions.contains { $0.id == sessionID && $0.ask != nil } }) else { return }
+        update(project.id) { p in
+            guard let index = p.sessions.firstIndex(where: { $0.id == sessionID }), let ask = p.sessions[index].ask else { return }
+            let now = Date.now
+            if p.sessions[index].state.needsYou {
+                p.sessions[index].state = .idle
+                p.sessions[index].since = now
+            }
+            p.sessions[index].message = nil
+            p.sessions[index].ask = nil
+            p.sessions[index].askBlocks = nil
+            p.sessions[index].askOptions = nil
+            p.log(Event(date: now, symbol: "xmark.bubble.fill", title: String(localized: "Dismissed on \(from)"), detail: ask))
+        }
+        PhoneShare.shared.boardChanged(soon: true)
+    }
+
     /// Whether a session's turn can be answered here by carrying it on in a chat: it ran on this Mac,
     /// so its transcript is here to fork, and the board doesn't run it already.
     func canContinue(_ session: Session) -> Bool {
@@ -192,6 +212,8 @@ extension ProjectStore {
             p.log(Event(date: now, state: .working, symbol: "arrowshape.turn.up.right.fill",
                         title: String(localized: "Carried on in Software Factory, from \(from)"), detail: text))
         }
+        // The iPhone stops showing the question as soon as it can.
+        PhoneShare.shared.boardChanged(soon: true)
         return id
     }
 

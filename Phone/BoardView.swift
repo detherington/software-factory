@@ -172,8 +172,9 @@ private struct LiveTile: View {
                 PermissionPrompt(ask: ask, onFlood: true, sent: board.answeredPermissions[ask.id], compact: true) { reply in
                     board.answer(ask, reply: reply, in: project)
                 }
-            } else if let session = project.openReply(at: now), session.askOptions != nil {
-                ReplyPrompt(session: session, onFlood: true, sent: board.hasReplied(to: session), compact: true) { text in
+            } else if let session = project.openReply(at: now), session.askOptions != nil, !board.hasDismissed(session) {
+                ReplyPrompt(session: session, onFlood: true, sent: board.hasReplied(to: session), compact: true,
+                            label: project.askLabel(for: session, at: now), dismiss: { board.dismiss(session, in: project) }) { text in
                     board.reply(to: session, text: text, in: project)
                 }
             } else if let session = project.answerable(at: now) {

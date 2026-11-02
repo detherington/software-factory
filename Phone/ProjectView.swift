@@ -244,9 +244,10 @@ private struct Now: View {
                     if let session = project.openable(at: now) {
                         AnswerLink(session: session, onFlood: true)
                     }
-                } else if let session = project.openReply(at: now) {
+                } else if let session = project.openReply(at: now), !board.hasDismissed(session) {
                     // Your answer carries the session on in a chat a Mac runs, which opens here.
-                    ReplyPrompt(session: session, onFlood: true, sent: board.hasReplied(to: session)) { text in
+                    ReplyPrompt(session: session, onFlood: true, sent: board.hasReplied(to: session), label: project.askLabel(for: session, at: now),
+                                dismiss: { board.dismiss(session, in: project) }) { text in
                         openedChat = board.reply(to: session, text: text, in: project)
                     }
                     .padding(.top, 8)

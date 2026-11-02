@@ -150,7 +150,8 @@ private struct NowPanel: View {
                     .frame(maxWidth: 760, alignment: .leading)
                     .padding(.top, 6)
                 } else if let session = project.openReply(at: now) {
-                    ReplyPrompt(session: session, onFlood: true, answerable: store.canContinue(session)) { text in
+                    ReplyPrompt(session: session, onFlood: true, answerable: store.canContinue(session), label: project.askLabel(for: session, at: now),
+                                dismiss: { store.dismissAsk(session.id, from: String(localized: "this Mac")) }) { text in
                         if let chat = store.continueInChat(session.id, saying: text, from: String(localized: "this Mac")) { openWindow(id: "chat", value: chat) }
                     }
                     .frame(maxWidth: 760, alignment: .leading)

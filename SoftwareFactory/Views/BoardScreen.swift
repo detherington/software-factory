@@ -142,7 +142,9 @@ struct LiveCard: View {
                 }
                 .padding(.top, 4)
             } else if let reply {
-                ReplyPrompt(session: reply, onFlood: true, answerable: store.canContinue(reply), compact: true) { text in
+                ReplyPrompt(session: reply, onFlood: true, answerable: store.canContinue(reply), compact: true,
+                            label: project.askLabel(for: reply, at: now),
+                            dismiss: { store.dismissAsk(reply.id, from: String(localized: "this Mac")) }) { text in
                     if let chat = store.continueInChat(reply.id, saying: text, from: String(localized: "this Mac")) { openWindow(id: "chat", value: chat) }
                 }
                 .padding(.top, 4)

@@ -362,15 +362,31 @@ struct ReplyPrompt: View {
     var sent = false
     /// Only the buttons, where room is short.
     var compact = false
+    /// Which session asks, when the project has more than one: "awesome-lumiere-fa9e40 · Rig the fighter".
+    var label: String?
+    /// Clears the question without answering it, when you won't.
+    var dismiss: (() -> Void)?
     let reply: (String) -> Void
 
     var body: some View {
-        let question = PermissionAsk.Question(question: session.ask ?? "",
+        let question = PermissionAsk.Question(question: session.ask ?? "", header: label,
                                               options: (session.askOptions ?? []).map { PermissionAsk.Question.Option(label: $0) })
-        QuestionPrompt(questions: [question], onFlood: onFlood, answerable: answerable, sent: sent, compact: compact,
-                       typePrompt: question.options.isEmpty ? String(localized: "Reply to Claude") : String(localized: "Or type your own reply"),
-                       sentLabel: String(localized: "Sent. Waiting for your Mac to pass it on…")) { answers in
-            if let text = answers.values.first { reply(text) }
+        let ink = onFlood ? Switchyard.ink : Switchyard.text
+        VStack(alignment: .leading, spacing: 8) {
+            QuestionPrompt(questions: [question], onFlood: onFlood, answerable: answerable, sent: sent, compact: compact,
+                           typePrompt: question.options.isEmpty ? String(localized: "Reply to Claude") : String(localized: "Or type your own reply"),
+                           sentLabel: String(localized: "Sent. Waiting for your Mac to pass it on…")) { answers in
+                if let text = answers.values.first { reply(text) }
+            }
+            if let dismiss, !sent {
+                Button(action: dismiss) {
+                    Label(String(localized: "Dismiss"), systemImage: "xmark")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(ink.opacity(0.7))
+                }
+                .buttonStyle(.plain)
+                .help(String(localized: "Stop showing this question here. The session still waits for you in Claude."))
+            }
         }
     }
 }
@@ -411,6 +427,13 @@ extension Project {
     /// The live session whose turn ended asking you something, which a reply carries on in a chat.
     func openReply(at now: Date) -> Session? {
         liveSessions(at: now).first { $0.state.needsYou && $0.ask != nil && $0.permission == nil }
+    }
+
+    /// Which session a question is from, when more than one is live: its worktree (or the main
+    /// folder) and its task.
+    func askLabel(for session: Session, at now: Date) -> String? {
+        guard liveSessions(at: now).count > 1 else { return nil }
+        return [session.worktree ?? String(localized: "Main folder"), session.task].compactMap { $0 }.joined(separator: " · ")
     }
 }
 

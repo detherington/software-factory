@@ -184,7 +184,7 @@ nonisolated enum CloudBoard {
 
     /// Something changed on the iPhone, for the Macs to fold in.
     struct Change: Codable, Sendable {
-        enum Kind: String, Codable, Sendable { case todo, snooze, permission, reply, message, interrupt, start, mode }
+        enum Kind: String, Codable, Sendable { case todo, snooze, permission, reply, message, interrupt, start, mode, dismiss }
 
         var kind: Kind
         /// The project, as the board the iPhone saw names it, and its name, to find it on any Mac.

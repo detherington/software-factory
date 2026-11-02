@@ -374,6 +374,12 @@ final class PhoneShare {
             return carried || known || now.timeIntervalSince(change.answered ?? .distantPast) > 86_400
         case .message, .interrupt, .start, .mode:
             return foldChat(change, into: store, host: host, now: now)
+        case .dismiss:
+            // A question cleared on the iPhone; one for another Mac's session is that Mac's to clear.
+            guard let session = change.session else { return true }
+            let here = store.local.values.contains { $0.sessions.contains { $0.id == session } }
+            store.dismissAsk(session, from: String(localized: "the iPhone"))
+            return here || now.timeIntervalSince(change.answered ?? .distantPast) > 86_400
         }
     }
 

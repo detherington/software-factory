@@ -195,6 +195,19 @@ final class PhoneBoard {
         await save(CloudBoard.Change(kind: .reply, project: project, answered: .now, session: session, text: text, chat: UUID().uuidString.lowercased()))
     }
 
+    /// Questions dismissed here, by session, until a fetched board no longer has them.
+    private(set) var dismissed: [String: Date] = [:]
+
+    /// Clears a turn's question you won't answer: on your Macs' board too.
+    func dismiss(_ session: Session, in project: Project) {
+        dismissed[session.id] = .now
+        send(CloudBoard.Change(kind: .dismiss, project: project.id, projectName: project.name, answered: .now, session: session.id))
+    }
+
+    func hasDismissed(_ session: Session) -> Bool {
+        (dismissed[session.id] ?? .distantPast) > session.since
+    }
+
     /// Whether a reply sent from here is still on its way to the session's turn that ended.
     func hasReplied(to session: Session) -> Bool {
         (replied[session.id] ?? .distantPast) > session.since
@@ -336,6 +349,7 @@ final class PhoneBoard {
         let asked = Set(projects.flatMap { $0.sessions.compactMap { $0.permission?.id } })
         answeredPermissions = answeredPermissions.filter { asked.contains($0.key) }
         replied = replied.filter { Date.now.timeIntervalSince($0.value) < 86_400 }
+        dismissed = dismissed.filter { Date.now.timeIntervalSince($0.value) < 86_400 }
         for (id, item) in pendingTodos {
             let fetched = projects.first { $0.id == item.project }?.todos?.first { $0.id == id }
             if let fetched, fetched.updated >= item.todo.updated { pendingTodos[id] = nil } else { apply(item.todo, to: item.project) }
