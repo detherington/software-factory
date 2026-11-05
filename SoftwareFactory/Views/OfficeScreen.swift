@@ -178,6 +178,9 @@ private struct PersonCard: View {
             if let task = member.person.task {
                 Text(task).font(.system(size: 12)).foregroundStyle(Switchyard.textSecondary).lineLimit(3)
             }
+            if let doing = member.person.doing {
+                Label(doing, systemImage: "bolt.fill").font(.system(size: 11, weight: .medium)).foregroundStyle(Swatch.violet.color).lineLimit(2)
+            }
             if let machine = member.person.machine {
                 Label(machine, systemImage: "desktopcomputer").font(.system(size: 11, weight: .medium)).foregroundStyle(Switchyard.textTertiary)
             }

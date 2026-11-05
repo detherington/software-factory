@@ -116,14 +116,18 @@ nonisolated struct OfficeCast: Sendable {
     // MARK: Seats
 
     private mutating func seat() {
-        // Teams by their latest sign of life; the Lead's team first, so it always has a zone.
+        // Teams by whether anyone's at work, then their latest sign of life; the Lead's team first,
+        // so it always has a zone.
         var latest: [String: Date] = [:]
+        var busy: Set<String> = []
         for member in members.values {
             guard let team = member.person.team else { continue }
             latest[team] = max(latest[team] ?? .distantPast, member.person.activity)
+            if !member.isLeaving, member.shown.isAtWork { busy.insert(team) }
         }
         let teams = latest.keys.sorted { a, b in
             if (a == leadTeam) != (b == leadTeam) { return a == leadTeam }
+            if busy.contains(a) != busy.contains(b) { return busy.contains(a) }
             return latest[a]! != latest[b]! ? latest[a]! > latest[b]! : a < b
         }
         for index in zones.indices where zones[index].map({ latest[$0] == nil }) ?? false { zones[index] = nil }
@@ -136,6 +140,14 @@ nonisolated struct OfficeCast: Sendable {
             unzoned.append(zones[quietest]!)
             zones[quietest] = lead
             unzoned.removeAll { $0 == lead }
+        }
+        // A team at work with no zone takes the zone of one where nobody is, the quietest first.
+        for team in unzoned where busy.contains(team) {
+            let quiet = zones.indices.filter { zones[$0] != leadTeam && !busy.contains(zones[$0] ?? "") }
+            guard let index = quiet.min(by: { latest[zones[$0]!]! < latest[zones[$1]!]! }) else { break }
+            unzoned.append(zones[index]!)
+            zones[index] = team
+            unzoned.removeAll { $0 == team }
         }
         hiddenTeams = unzoned
 

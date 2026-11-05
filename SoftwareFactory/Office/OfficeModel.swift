@@ -110,6 +110,8 @@ nonisolated struct OfficePerson: Hashable, Sendable, Identifiable {
     var activity: Date
     /// Their name tag, when the data says it (the owner's); the cast names everyone else.
     var name: String? = nil
+    /// What they're doing right now: a session's last tool call, "Editing Theme.swift".
+    var doing: String? = nil
 }
 
 nonisolated struct OfficeMessage: Hashable, Sendable {
@@ -251,7 +253,8 @@ nonisolated enum OfficeMapper {
                     : session.worktree.map { String(localized: "Session · \($0)") } ?? String(localized: "Session · \(project.name)")
                 people.append(OfficePerson(id: session.id, role: isLead ? .lead : .session, title: title, team: project.id, zone: zone,
                                            state: state, since: since, task: session.task, label: label, board: session.state,
-                                           machine: session.machine, activity: session.updated))
+                                           machine: session.machine, activity: session.updated,
+                                           doing: session.state == .working ? session.activity : nil))
                 if session.state.needsYou, let label {
                     messages.append(OfficeMessage(from: session.id, to: "owner", label: clip(label, 60), at: session.since))
                 }

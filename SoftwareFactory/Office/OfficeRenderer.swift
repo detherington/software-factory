@@ -260,6 +260,13 @@ struct OfficeRenderer {
             place(art.badge("+\(extra)", fill: Pixel.rgb(OfficePalette.zoneSwatches[zone].hex)),
                   at: OfficeGeometry.point(Double(zone * OfficeFloor.zoneWidth) + 3.5, 12.4), in: context)
         }
+        // Someone typing behind an office's glass: a bubble, so you can see it from the front.
+        let frame = Int(date.timeIntervalSinceReferenceDate * 3)
+        for figure in ordered where figure.seated {
+            guard let seat = figure.seat, OfficeFloor.room(of: seat) != nil, let member = cast.members[figure.id], member.shown == .working else { continue }
+            let (ax, ay) = Self.anchor(figure)
+            place(art.typing(frame: frame + Int(OfficeNames.hash(figure.id) % 4)), at: OfficeGeometry.point(ax, ay, 22), in: context, alpha: figure.opacity)
+        }
         // Balloons last: they're what you read.
         for figure in ordered where figure.seated {
             guard let member = cast.members[figure.id], member.shown == .talking, let label = member.label else { continue }

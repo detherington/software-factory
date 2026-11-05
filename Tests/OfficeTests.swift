@@ -288,6 +288,29 @@ struct OfficeTests {
         #expect(cast.members["gamma-lead"]?.seat == .room(gammaRoom!))
     }
 
+    /// More teams than zones: one at work isn't left off the floor for one where nobody is.
+    @Test func aBusyTeamTakesTheZoneOfAQuietOne() {
+        var cast = OfficeCast()
+        let teams = ["a", "b", "c", "d", "e", "f"]
+        func crew(working: Set<String>) -> [OfficePerson] {
+            teams.enumerated().map { index, team in
+                person("\(team)-1", team: team, working.contains(team) ? .working : .idle, activity: -Double(index * 60))
+            }
+        }
+        // "f" is the quietest and finds no zone.
+        cast.update(office(crew(working: ["a", "b", "c", "d"])), now: now)
+        #expect(cast.hiddenTeams == ["f"])
+        #expect(cast.zone(of: "e") != nil)
+        let zoneE = cast.zone(of: "e")
+        // "f" gets to work: it takes "e"'s zone, where nobody is.
+        cast.update(office(crew(working: ["a", "b", "c", "d", "f"])), now: now.addingTimeInterval(5))
+        cast.tick(now: now.addingTimeInterval(9))
+        #expect(cast.zone(of: "f") == zoneE)
+        #expect(cast.hiddenTeams == ["e"])
+        // Nobody busy is moved for it.
+        #expect(["a", "b", "c", "d"].allSatisfy { cast.zone(of: $0) != nil })
+    }
+
     @Test func theLeadOfficeChangesHandsAfterTwoRefreshes() {
         var cast = OfficeCast()
         func leads(_ focus: String) -> [OfficePerson] {

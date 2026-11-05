@@ -548,6 +548,24 @@ final class OfficeArt {
         }
     }
 
+    /// Three dots in a small bubble, rising one by one: someone typing in their office.
+    func typing(frame: Int) -> OfficeSprite? {
+        sprite("typing-\(frame % 4)") {
+            var canvas = PixelCanvas(width: 13, height: 10)
+            let paper = Pixel.rgb(0xFFFDF6)
+            canvas.fill(x: 1, y: 1, width: 11, height: 6, paper)
+            for x in 1..<12 { canvas[x, 0] = Pixel.outline; canvas[x, 7] = Pixel.outline }
+            for y in 1..<7 { canvas[0, y] = Pixel.outline; canvas[12, y] = Pixel.outline }
+            canvas[5, 7] = paper; canvas[6, 7] = paper
+            canvas[4, 8] = Pixel.outline; canvas[5, 8] = paper; canvas[6, 8] = Pixel.outline; canvas[5, 9] = Pixel.outline
+            for dot in 0..<3 {
+                let up = frame % 4 == dot ? 1 : 0
+                canvas.fill(x: 3 + dot * 3, y: 3 - up, width: 2, height: 2, Pixel.rgb(Swatch.violet.hex))
+            }
+            return canvas.image.map { OfficeSprite(image: $0, dx: -5, dy: -9) }
+        }
+    }
+
     /// A shadow under someone walking.
     func shadow() -> OfficeSprite? {
         sprite("shadow") {
