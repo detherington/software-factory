@@ -77,7 +77,8 @@ enum PaletteSearch {
         [(String(localized: "Board"), "square.grid.2x2.fill", SidebarItem.board),
          (String(localized: "Today"), "sun.horizon.fill", .today),
          (String(localized: "Activity"), "waveform.path.ecg", .activity),
-         (String(localized: "Passport"), "book.closed.fill", .passport)].map { title, symbol, item in
+         (String(localized: "Passport"), "book.closed.fill", .passport),
+         (String(localized: "Office"), "building.2.fill", .office)].map { title, symbol, item in
             PaletteItem(id: "screen-\(title)", symbol: symbol, title: title) { showOnBoard(item) }
         }
     }

@@ -15,6 +15,7 @@ struct RootView: View {
                 case .today: TodayScreen()
                 case .activity: ActivityScreen()
                 case .passport: PassportScreen()
+                case .office: OfficeScreen()
                 case .project(let id): ProjectScreen(id: id)
                 }
             }
@@ -39,6 +40,8 @@ private struct Sidebar: View {
                 .tag(SidebarItem.activity)
             Label("Passport", systemImage: "book.closed.fill")
                 .tag(SidebarItem.passport)
+            Label("Office", systemImage: "building.2.fill")
+                .tag(SidebarItem.office)
 
             let live = store.live
             if !live.isEmpty {
@@ -221,6 +224,7 @@ extension View {
             .environment(PromptStore.shared)
             .environment(DigestStore.shared)
             .environment(PhoneShare.shared)
+            .environment(OfficeDirector.shared)
             .tint(Switchyard.accent)
             .preferredColorScheme(.dark)
     }

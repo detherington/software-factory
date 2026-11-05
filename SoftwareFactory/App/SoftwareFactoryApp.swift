@@ -125,6 +125,8 @@ struct FactoryCommands: Commands {
                 .keyboardShortcut("3", modifiers: .command)
             Button("Passport") { Navigator.shared.selection = .passport }
                 .keyboardShortcut("4", modifiers: .command)
+            Button("Office") { Navigator.shared.selection = .office }
+                .keyboardShortcut("5", modifiers: .command)
             Divider()
             Button("Open Palette…") { PaletteController.shared.show() }
                 .keyboardShortcut("k", modifiers: .command)

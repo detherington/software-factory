@@ -6,6 +6,7 @@ enum SidebarItem: Hashable {
     case today
     case activity
     case passport
+    case office
     case project(String)
 }
 
