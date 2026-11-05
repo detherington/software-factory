@@ -87,6 +87,7 @@
 		72FA50870759D3109966BF89 /* HostedChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FC77D8CEB170F5A483BC13C /* HostedChat.swift */; };
 		758E7F843CCBDABE9E758FF1 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC4108F9413F726771B2206C /* Components.swift */; };
 		7B298B082E7007A6762CC155 /* ChatScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C060440372571073A6F681D /* ChatScreen.swift */; };
+		7BF6A023B7CA76779070DEC7 /* StepsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10B038FABCE841A4ED53808B /* StepsTests.swift */; };
 		7C88CC87B3C7141FD1C49BDD /* HostedChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FC77D8CEB170F5A483BC13C /* HostedChat.swift */; };
 		821FC4B5311064DE915DFCC2 /* Snapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3337D5EF310805146783373B /* Snapshot.swift */; };
 		8458BE766B56CBDE2A355E77 /* PermissionAlert.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C2DA3AD9A4FA0D1A8CD9B35 /* PermissionAlert.swift */; };
@@ -235,6 +236,7 @@
 		0BF38F580CC5C5382F30EEDE /* PassportScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PassportScreen.swift; sourceTree = "<group>"; };
 		0D94AE4565CC38EEEB3B6796 /* BoardMerge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardMerge.swift; sourceTree = "<group>"; };
 		0ECB657D4E73EDF7F5EBFA54 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
+		10B038FABCE841A4ED53808B /* StepsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StepsTests.swift; sourceTree = "<group>"; };
 		1D77EF8B4EC9A56521315CB5 /* FeedbackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackTests.swift; sourceTree = "<group>"; };
 		1DE41ABF704054893FFCD764 /* ClaudeSetup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeSetup.swift; sourceTree = "<group>"; };
 		21895AB68B3E50CED8D9FA68 /* StreamJSON.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamJSON.swift; sourceTree = "<group>"; };
@@ -503,6 +505,7 @@
 				4A198D1454BDC1B9497324F6 /* PermissionTests.swift */,
 				E891227F615808B2047D8DA0 /* PhoneChangeTests.swift */,
 				04AB8D5CBCEFC795C554C480 /* ReplyTests.swift */,
+				10B038FABCE841A4ED53808B /* StepsTests.swift */,
 				5CD2244F87063825DC24265E /* TestBoard.swift */,
 				38F7BA4E8383B5B734461838 /* WorktreeTests.swift */,
 			);
@@ -902,6 +905,7 @@
 				0523E07FC9F61D9ECB081466 /* SessionHost.swift in Sources */,
 				592B508218BB44A4F031420E /* SettingsView.swift in Sources */,
 				821FC4B5311064DE915DFCC2 /* Snapshot.swift in Sources */,
+				7BF6A023B7CA76779070DEC7 /* StepsTests.swift in Sources */,
 				B1CBC8B2D97D883F23B83795 /* StreamJSON.swift in Sources */,
 				3188DE543A6D3D1C62AAAB33 /* SyncFolder.swift in Sources */,
 				AEFCCD30D218DC4647B4D665 /* TestBoard.swift in Sources */,

@@ -131,9 +131,10 @@ It prints nothing and always exits 0, so a closed app never gets in a session's 
 | `PreToolUse` (AskUserQuestion, ExitPlanMode, Bash) | Needs you: the question, or "A plan is ready for your review". For Bash, what's about to run, while it runs |
 | `PostToolUse` | Working, with what it just did: "Editing Theme.swift", or a Bash command's description. TodoWrite, the desktop app's `update_plan`, and TaskCreate/TaskUpdate become the session's steps |
 | `PermissionRequest` | Needs you: "Asks to run git push", with the command, file or address in full. When the board can answer it, the hook waits for Allow or Deny |
+| `PermissionDenied` | Auto mode refused a tool call by itself, without asking. The timeline says what and why, in ember: "Auto mode wouldn't let it run git push origin --delete old", "Git Destructive". The turn goes on |
 | `Notification` (permission prompt) | Needs you, with Claude's message, unless `PermissionRequest` already said what's asked |
 | `PreCompact`, `PostCompact` | Working · Compacting, until the compaction is done |
-| `Stop` | Blocked if the turn ended on an API error; Your call (or Needs you) if Claude Desktop's next-step box asked a question; Background while work the session started hasn't reported back; otherwise Idle. Logs "Finished after 12 m" |
+| `Stop` | Blocked if the turn ended on an API error; Your call (or Needs you) if Claude Desktop's next-step box asked a question; Background while work the session started hasn't reported back; otherwise Idle. Logs "Finished after 12 m". A turn that finishes without a question ticks off the step it was on, which Claude often leaves unticked: in its own list, and in the checklist it reported that turn with `factory steps` or `factory advance` (unless another of the project's sessions is still at work). Steps it hadn't started stay as they are |
 | `StopFailure` | The turn ended on an API error: Blocked, with the error in words |
 | `SessionEnd` | Removes the session |
 

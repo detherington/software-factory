@@ -353,6 +353,8 @@ struct Session: Codable, Identifiable, Hashable, Sendable {
     var steps: [Step]
     /// When its task list last changed.
     var stepsUpdated: Date?
+    /// When its current turn began: what it reported since then is this turn's.
+    var turnStarted: Date?
     var started: Date
     var updated: Date
     /// When its current state began.

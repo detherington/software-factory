@@ -82,6 +82,8 @@ nonisolated enum ClaudeSetup {
         ("SessionEnd", nil),
         // A permission prompt, which the board can answer: this one waits for it.
         ("PermissionRequest", "*"),
+        // Auto mode refused a tool call by itself, without asking: the timeline says what and why.
+        ("PermissionDenied", "*"),
     ]
 
     /// One of our entries in the settings: the event, its matcher, the handler's command and

@@ -81,6 +81,7 @@ extension ProjectStore {
 
             case "UserPromptSubmit":
                 set(.working)
+                s.turnStarted = now
                 s.message = nil
                 s.action = nil
                 s.ask = nil
@@ -163,6 +164,13 @@ extension ProjectStore {
                 }
                 p.log(Event(date: now, state: .waiting, symbol: ProjectState.waiting.symbol, title: words.message, detail: words.summary))
 
+            case "PermissionDenied":
+                // Auto mode's check refused a tool call, without asking. The turn goes on; the
+                // timeline says what it stopped and why, so you can say so specifically if it should run.
+                let words = HookText.permission(tool: tool, input: input)
+                p.log(Event(date: now, state: .blocked, symbol: "hand.raised.slash.fill", title: HookText.blocked(words.message),
+                            detail: HookText.denialReason(payload["reason"] as? String)))
+
             case "Notification":
                 let message = payload["message"] as? String ?? ""
                 let type = payload["notification_type"] as? String ?? ""
@@ -224,6 +232,8 @@ extension ProjectStore {
                         p.log(Event(date: now, symbol: "checkmark.circle.fill", title: s.task ?? "Finished a turn",
                                     detail: "Finished after \(Formats.duration(elapsed))" + (waitingOn.map { "; waiting on \($0)" } ?? "")))
                     }
+                    // Its work is done: Claude often leaves the last step it was on unticked.
+                    if finished, waitingOn == nil { HookText.finishSteps(of: &s, in: &p, now: now) }
                     set(waitingOn == nil ? .idle : .background)
                     s.message = nil
                 }
@@ -484,6 +494,40 @@ nonisolated enum HookText {
     }
 
     /// Task lists become the session's steps: TodoWrite, the desktop app's update_plan, TaskCreate/TaskUpdate.
+    /// "Auto mode wouldn't let it run git push origin --delete old", from a prompt's "Asks to run …".
+    static func blocked(_ message: String) -> String {
+        let action = message.hasPrefix("Asks to ") ? String(message.dropFirst("Asks to ".count)) : message
+        return String(localized: "Auto mode wouldn't let it \(action)")
+    }
+
+    /// Why: the rule auto mode matched ("[Git Destructive]" says "Git Destructive"), or that it couldn't
+    /// judge the action at all.
+    static func denialReason(_ reason: String?) -> String? {
+        guard let reason = reason?.trimmed else { return nil }
+        if let rule = reason.firstMatch(of: /^\[([^\]]+)\]/)?.1 { return String(rule) }
+        if reason.localizedCaseInsensitiveContains("could not evaluate") || reason.localizedCaseInsensitiveContains("no verdict") {
+            return String(localized: "Auto mode couldn't judge it, so it stopped it")
+        }
+        return reason.count > 120 ? String(reason.prefix(119)) + "…" : reason
+    }
+
+    /// A turn that finished without a question: the step under way is done, in the session's own list
+    /// and in the checklist reported this turn (`factory steps`, `factory advance`), unless another of
+    /// the project's sessions is still at work on it. Steps not yet started are left as they are.
+    static func finishSteps(of session: inout Session, in project: inout Project, now: Date) {
+        if session.steps.contains(where: { $0.status == .active }) {
+            for index in session.steps.indices where session.steps[index].status == .active { session.steps[index].status = .done }
+            session.stepsUpdated = now
+        }
+        let sessionID = session.id
+        guard let started = session.turnStarted, let reported = project.stepsUpdated, reported >= started,
+              !project.liveSessions(at: now).contains(where: { $0.id != sessionID && $0.state == .working }) else { return }
+        for index in project.steps.indices where project.steps[index].status == .active {
+            project.steps[index].status = .done
+            project.log(Event(date: now, state: .done, symbol: "checkmark", title: project.steps[index].title, detail: "Step done"))
+        }
+    }
+
     static func applySteps(tool: String, input: [String: Any], to steps: inout [Step]) {
         if tool == "TodoWrite", let todos = input["todos"] as? [[String: Any]] {
             steps = todos.map { Step(title: $0["content"] as? String ?? "", status: .init(loose: $0["status"] as? String)) }
